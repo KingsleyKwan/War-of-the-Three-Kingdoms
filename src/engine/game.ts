@@ -141,6 +141,7 @@ export function createMatch(config: MatchConfig): GameSnapshot {
     round: 1,
     prompt: idlePrompt(),
     log: [],
+    killLog: [],
     winnerIds: null,
     resultMessage: null,
     fx: { play: null, damages: [] },
@@ -2094,7 +2095,7 @@ function dealDamage(
   log(state, `${t.name} 受到 ${amount} 點${natureLabel}傷害（體力 ${Math.max(t.hp, 0)}）。`)
 
   if (t.hp <= 0) {
-    trySave(state, targetId)
+    trySave(state, targetId, sourceId)
   }
 
   if (sourceId !== null && t.alive) {
@@ -2168,7 +2169,7 @@ function dealDamage(
   return false
 }
 
-function trySave(state: GameSnapshot, targetId: number): void {
+function trySave(state: GameSnapshot, targetId: number, killerId: number | null = null): void {
   const t = state.players[targetId]
   // Self tao first (auto for dying)
   while (t.hp <= 0) {
@@ -2194,8 +2195,28 @@ function trySave(state: GameSnapshot, targetId: number): void {
       log(state, `${t.name} 因失去裝備回覆體力，脫離瀕死（體力 ${t.hp}）。`)
     } else {
       t.alive = false
+      const seatLabel = (p: (typeof t)) => {
+        if (p.isHuman) return p.generalId ? getGeneral(p.generalId).name : p.name
+        const generic = !p.name || p.name === '友軍' || p.name === '敵軍' || p.name.startsWith('電腦')
+        if (!generic) return p.name
+        return p.generalId ? getGeneral(p.generalId).name : p.name
+      }
+      const victimName = seatLabel(t)
+      const killer =
+        killerId !== null && state.players[killerId] ? state.players[killerId] : null
+      const killerName = killer ? seatLabel(killer) : null
+      state.killLog.push({
+        victimId: targetId,
+        victimName,
+        killerId: killer?.id ?? null,
+        killerName,
+      })
       observePublicEvent(state, { type: 'death', playerId: targetId })
-      log(state, `${t.name}（${getGeneral(t.generalId).name}）陣亡。`)
+      if (killerName) {
+        log(state, `${victimName} 陣亡，為 ${killerName} 所殺。`)
+      } else {
+        log(state, `${victimName} 陣亡。`)
+      }
     }
   }
 }
@@ -2213,7 +2234,7 @@ export function activateSkill(state: GameSnapshot, playerId: number, skillId: st
     log(state, `${p.name} 發動【苦肉】，失去1點體力。`)
     draw(state, playerId, 2)
     log(state, `${p.name} 摸兩張牌。`)
-    if (p.hp <= 0) trySave(state, playerId)
+    if (p.hp <= 0) trySave(state, playerId, playerId)
     checkVictory(state)
     if (!state.winnerIds && p.alive) setPlayPrompt(state)
     return

@@ -314,6 +314,107 @@ input {
   max-width: 42rem;
 }
 
+.campaign-map-wrap {
+  margin: 0.25rem 0 1rem;
+  padding: 0.75rem 0.65rem 0.85rem;
+  background: rgba(26, 18, 12, 0.65);
+  border: 1px solid rgba(196, 163, 90, 0.28);
+  border-radius: 3px;
+}
+
+.campaign-map-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin-bottom: 0.55rem;
+  font-size: 0.85rem;
+  color: rgba(232, 220, 196, 0.75);
+}
+
+.map-era {
+  color: var(--gold);
+  letter-spacing: 0.12em;
+}
+
+.campaign-map {
+  display: block;
+  width: 100%;
+  max-height: min(42vh, 280px);
+  background: #16100b;
+  border-radius: 2px;
+}
+
+.map-river {
+  stroke: rgba(90, 130, 150, 0.35);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+
+.map-city-name {
+  fill: rgba(255, 244, 214, 0.92);
+  font-size: 3.2px;
+  font-family: 'Iansui', 'Noto Serif TC', serif;
+}
+
+.map-city-faction {
+  fill: rgba(196, 163, 90, 0.85);
+  font-size: 2.4px;
+  font-family: 'Noto Serif TC', serif;
+}
+
+.map-city.battle .map-city-name {
+  fill: #ffe9b0;
+  font-size: 3.6px;
+}
+
+.map-arrow-line {
+  stroke: #e8c56a;
+  stroke-width: 0.85;
+  stroke-dasharray: 2.2 1.4;
+  fill: none;
+  animation: map-dash 1.2s linear infinite;
+}
+
+@keyframes map-dash {
+  to {
+    stroke-dashoffset: -7;
+  }
+}
+
+.map-move-label {
+  fill: rgba(255, 230, 170, 0.9);
+  font-size: 2.6px;
+  font-family: 'Iansui', 'Noto Serif TC', serif;
+}
+
+.map-legend {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  color: rgba(232, 220, 196, 0.7);
+}
+
+.map-legend strong {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.story-bridge {
+  margin: 0 0 1em;
+  padding-bottom: 0.85em;
+  border-bottom: 1px solid rgba(196, 163, 90, 0.25);
+  color: rgba(255, 230, 170, 0.88);
+}
+
+.epilogue-screen .topbar h2 {
+  width: 100%;
+  text-align: center;
+}
+
 .story-scroll {
   margin: 0.35rem 0 1rem;
   padding: 1.35rem 1.25rem 1.5rem;

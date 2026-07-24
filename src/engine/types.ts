@@ -115,6 +115,13 @@ export interface LogEntry {
   t: number
 }
 
+export interface KillRecord {
+  victimId: number
+  victimName: string
+  killerId: number | null
+  killerName: string | null
+}
+
 export interface VictoryRule {
   type: 'eliminate_enemies' | 'eliminate_all_others' | 'kill_target' | 'survive_rounds'
   targetGeneralId?: string
@@ -172,6 +179,8 @@ export interface GameSnapshot {
   round: number
   prompt: PromptState
   log: LogEntry[]
+  /** Deaths in order; killer may be null (e.g. judgement / unknown) */
+  killLog: KillRecord[]
   winnerIds: number[] | null
   resultMessage: string | null
   fx: TableFx

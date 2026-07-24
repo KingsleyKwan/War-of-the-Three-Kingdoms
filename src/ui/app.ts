@@ -3,12 +3,14 @@ import { formatMindDebug } from '../ai/mind'
 import { getCardDef } from '../data/cards'
 import {
   buildFreeMatch,
+  buildStageEpilogue,
   buildStageMatch,
   CAOCAO_STAGES,
   loadCampaignProgress,
   unlockNextStage,
   type CampaignStage,
 } from '../data/campaigns/caocao'
+import { renderCampaignMap } from '../data/campaigns/map'
 import { getGeneral } from '../data/generals'
 import { CARD_HELP, rankLabel, suitName, suitSymbol } from '../data/help'
 import { portraitDataUri } from '../data/portraits'
@@ -30,7 +32,7 @@ import type { GameSnapshot, GameMode, PlayerState, PlayFx } from '../engine/type
 import { loadSettings, saveSettings, type AppSettings } from '../persist/settings'
 import { APP_VERSION } from '../version'
 
-type Screen = 'start' | 'setup' | 'settings' | 'story' | 'stage' | 'table' | 'result'
+type Screen = 'start' | 'setup' | 'settings' | 'story' | 'stage' | 'table' | 'epilogue' | 'result'
 
 interface AppState {
   screen: Screen
@@ -96,6 +98,10 @@ function render(): void {
     case 'table':
       el.innerHTML = renderTable()
       bindTable()
+      break
+    case 'epilogue':
+      el.innerHTML = renderEpilogue()
+      bindEpilogue()
       break
     case 'result':
       el.innerHTML = renderResult()
@@ -302,7 +308,7 @@ function renderStoryList(): string {
       <button type="button" class="btn ghost" data-back>返回</button>
       <h2>劇情・曹操傳</h2>
     </header>
-    <p class="story-intro">取材 E殺曹操傳風格的單人關卡。目前開放前三關，後續可繼續擴充。</p>
+    <p class="story-intro">取材 E殺曹操傳風格的單人關卡。潁川至赤壁已開放，關卡以地圖與劇情相連。</p>
     <ul class="stage-list">
       ${CAOCAO_STAGES.map((s) => {
         const locked = s.index > progress
@@ -310,14 +316,14 @@ function renderStoryList(): string {
           <button type="button" data-stage="${s.id}" ${locked ? 'disabled' : ''}>
             <span class="idx">第${s.index}關</span>
             <span class="st">${s.title}</span>
-            <span class="sub">${s.subtitle}</span>
+            <span class="sub">${s.subtitle}・${s.era}</span>
             ${locked ? '<span class="lock">未解鎖</span>' : ''}
           </button>
         </li>`
       }).join('')}
       <li class="locked soon">
         <button type="button" disabled>
-          <span class="idx">第4關起</span>
+          <span class="idx">第7關起</span>
           <span class="st">更多關卡</span>
           <span class="sub">即將加入</span>
         </button>
@@ -350,17 +356,29 @@ function renderStageBrief(): string {
     .filter(Boolean)
     .map((line) => `<p>${line}</p>`)
     .join('')
+  const linkHtml = s.prevLink
+    ? `<p class="story-bridge">${escapeHtml(s.prevLink)}</p>`
+    : ''
+  const mapHtml = renderCampaignMap({
+    title: s.title,
+    era: s.era,
+    battlefieldCityId: s.battlefieldCityId,
+    cityFactions: s.cityFactions,
+    movements: s.movements,
+    visibleCityIds: s.visibleCityIds,
+  })
   return `
   <div class="screen panel-screen story-prologue">
     <header class="topbar">
       <button type="button" class="btn ghost" data-back>返回</button>
       <h2>${s.title}</h2>
     </header>
+    ${mapHtml}
     <div class="story-scroll" aria-label="關卡劇情">
-      <div class="story-hand">${storyHtml}</div>
+      <div class="story-hand">${linkHtml}${storyHtml}</div>
     </div>
     <div class="panel story-ready">
-      <p class="meta">卡包：${s.packs.includes('ex') ? '標準 + 軍爭' : '標準包'}</p>
+      <p class="meta">卡包：${s.packs.includes('ex') ? '標準 + 軍爭' : '標準包'}　・　${escapeHtml(s.era)}</p>
       ${
         choices.length
           ? `<label class="field"><span>自選副將</span>
@@ -1047,7 +1065,7 @@ function bindTable(): void {
 
   root().querySelector('#ack-match-end')?.addEventListener('click', () => {
     app.matchEndPending = false
-    app.screen = 'result'
+    app.screen = app.stage ? 'epilogue' : 'result'
     render()
   })
 
@@ -1075,6 +1093,46 @@ function maybeFinish(): void {
     app.matchEndPending = true
   }
   // Stay on the table so the last move remains visible; result opens on 「下一步」
+}
+
+function renderEpilogue(): string {
+  const s = app.stage!
+  const g = app.game!
+  const won = !!g.winnerIds?.includes(0)
+  const text = buildStageEpilogue(s, g)
+  const storyHtml = escapeHtml(text)
+    .split(/\n+/)
+    .filter(Boolean)
+    .map((line) => `<p>${line}</p>`)
+    .join('')
+  const mapHtml = renderCampaignMap({
+    title: s.title,
+    era: s.era,
+    battlefieldCityId: s.battlefieldCityId,
+    cityFactions: s.cityFactions,
+    movements: s.movements,
+    visibleCityIds: s.visibleCityIds,
+  })
+  return `
+  <div class="screen panel-screen story-prologue epilogue-screen">
+    <header class="topbar">
+      <h2>${won ? '戰後・勝' : '戰後・敗'}・${s.title}</h2>
+    </header>
+    ${mapHtml}
+    <div class="story-scroll" aria-label="戰後劇情">
+      <div class="story-hand">${storyHtml}</div>
+    </div>
+    <div class="panel story-ready">
+      <button type="button" class="btn primary" id="epilogue-next">下一步</button>
+    </div>
+  </div>`
+}
+
+function bindEpilogue(): void {
+  root().querySelector('#epilogue-next')?.addEventListener('click', () => {
+    app.screen = 'result'
+    render()
+  })
 }
 
 function renderResult(): string {

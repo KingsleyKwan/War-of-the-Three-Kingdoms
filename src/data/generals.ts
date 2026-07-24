@@ -246,6 +246,24 @@ export const GENERALS: GeneralDef[] = [
     skillText: '關卡敵將。',
   },
   {
+    id: 'zhangxiu',
+    name: '張繡',
+    kingdom: 'qun',
+    maxHp: 4,
+    gender: 'male',
+    skills: [],
+    skillText: '關卡敵將。',
+  },
+  {
+    id: 'yuanshao',
+    name: '袁紹',
+    kingdom: 'qun',
+    maxHp: 4,
+    gender: 'male',
+    skills: [],
+    skillText: '關卡敵將。',
+  },
+  {
     id: 'soldier',
     name: '士兵',
     kingdom: 'qun',
@@ -265,5 +283,5 @@ export function getGeneral(id: string): GeneralDef {
 }
 
 export function listGeneralsForPick(): GeneralDef[] {
-  return GENERALS.filter((g) => !['soldier', 'huaxiong'].includes(g.id))
+  return GENERALS.filter((g) => !['soldier', 'huaxiong', 'zhangxiu', 'yuanshao'].includes(g.id))
 }
