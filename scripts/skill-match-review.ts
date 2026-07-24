@@ -6,7 +6,7 @@
  */
 import { stepAiSimple } from '../src/ai/simple'
 import { GENERALS, getGeneral } from '../src/data/generals'
-import { createMatch, debugDealDamage, getLegalTargets } from '../src/engine/game'
+import { createMatch, debugDealDamage, getLegalTargets, resolveChoice } from '../src/engine/game'
 import { SKILL_CATALOG } from '../src/engine/skillCatalog'
 import type { GameSnapshot, MatchConfig } from '../src/engine/types'
 
@@ -121,7 +121,11 @@ function runAiMatch(state: GameSnapshot, maxSteps = 2500): { steps: number; issu
       if (skills.includes('jianxiong')) {
         const nearby = state.log.slice(beforeLog, beforeLog + 16)
         const died = nearby.some((l) => l.text.includes(name) && l.text.includes('陣亡'))
-        if (!died && !nearby.some((l) => l.text.includes('奸雄'))) {
+        const awaiting =
+          state.prompt.kind === 'choice' &&
+          state.prompt.choiceKey === 'jianxiong' &&
+          state.prompt.actorId === victim.id
+        if (!died && !awaiting && !nearby.some((l) => l.text.includes('奸雄'))) {
           issues.push({
             level: 'fail',
             msg: `奸雄 missing after ${name} damage (round ${state.round})`,
@@ -188,18 +192,44 @@ function scenarioJianxiong(): Issue[] {
   const issues: Issue[] = []
   const state = createMatch(duelConfig('caocao', 'zhangfei'))
   const cc = state.players[0]
+  const dmgCard = state.deck.pop()
+  if (!dmgCard) {
+    issues.push({ level: 'fail', msg: 'jianxiong scenario: no deck card for damage source' })
+    return issues
+  }
+  state.discard.push(dmgCard)
   const handBefore = cc.hand.length
+  debugDealDamage(state, 0, 1, 1, 'normal', dmgCard)
+  if (!cc.alive) return issues
+  if (state.prompt.kind !== 'choice' || state.prompt.choiceKey !== 'jianxiong') {
+    issues.push({ level: 'fail', msg: 'jianxiong scenario: expected take/skip choice prompt' })
+    return issues
+  }
+  resolveChoice(state, 0, 'take')
+  if (!state.log.some((l) => l.text.includes('奸雄') && l.text.includes('獲得'))) {
+    issues.push({ level: 'fail', msg: 'jianxiong scenario: no 奸雄 obtain log after take' })
+  }
+  if (cc.hand.length < handBefore + 1) {
+    issues.push({
+      level: 'fail',
+      msg: `jianxiong scenario: hand did not increase (${handBefore}→${cc.hand.length})`,
+    })
+  }
+  if (state.discard.some((c) => c.uid === dmgCard.uid)) {
+    issues.push({ level: 'fail', msg: 'jianxiong scenario: damage card still in discard after take' })
+  }
+
+  // Second hit with no recoverable card: no prompt
+  const hand2 = cc.hand.length
   debugDealDamage(state, 0, 1, 1)
-  if (cc.alive) {
-    if (!state.log.some((l) => l.text.includes('奸雄'))) {
-      issues.push({ level: 'fail', msg: 'jianxiong scenario: no 奸雄 log' })
-    }
-    if (cc.hand.length < handBefore + 1) {
-      issues.push({
-        level: 'fail',
-        msg: `jianxiong scenario: hand did not increase (${handBefore}→${cc.hand.length})`,
-      })
-    }
+  if (state.prompt.choiceKey === 'jianxiong') {
+    issues.push({ level: 'fail', msg: 'jianxiong scenario: should not prompt when no damage card' })
+  }
+  if (cc.hand.length !== hand2) {
+    issues.push({
+      level: 'fail',
+      msg: `jianxiong scenario: hand changed without card (${hand2}→${cc.hand.length})`,
+    })
   }
   return issues
 }

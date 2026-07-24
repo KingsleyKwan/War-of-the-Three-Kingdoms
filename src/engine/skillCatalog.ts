@@ -21,7 +21,7 @@ export const SKILL_CATALOG: SkillSpec[] = [
     name: '奸雄',
     owners: ['caocao'],
     trigger: '受到傷害後（存活）',
-    behaviour: '獲得造成傷害的牌；否則摸一張',
+    behaviour: '可選擇獲得造成傷害的牌（可拒絕）',
     status: 'ok',
     logHints: ['奸雄'],
   },

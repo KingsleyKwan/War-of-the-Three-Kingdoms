@@ -304,6 +304,7 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
     return equip ?? remaining.find((id) => id.startsWith('hand:')) ?? remaining[0] ?? 'confirm'
   }
   if (key === 'ganglie') return ids.includes('discard') ? 'discard' : 'damage'
+  if (key === 'jianxiong') return ids.includes('take') ? 'take' : 'skip'
   if (key === 'rende_target' || key === 'zhangba_target') {
     return ids[0] ?? null
   }

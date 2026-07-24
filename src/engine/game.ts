@@ -645,6 +645,7 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
       name: def.name,
       targets: others.map((t) => t.id),
       need: kind === 'nanman' ? 'sha' : 'shan',
+      card,
     })
     return
   }
@@ -707,11 +708,12 @@ type PendingTrick =
       name: string
       targets: number[]
       need: 'sha' | 'shan'
+      card: CardInstance
     }
   | { type: 'guohe'; sourceId: number; targetId: number }
   | { type: 'shunshou'; sourceId: number; targetId: number }
-  | { type: 'juedou'; sourceId: number; targetId: number }
-  | { type: 'huogong'; sourceId: number; targetId: number }
+  | { type: 'juedou'; sourceId: number; targetId: number; card: CardInstance }
+  | { type: 'huogong'; sourceId: number; targetId: number; card: CardInstance }
   | {
       type: 'delayed'
       sourceId: number
@@ -839,7 +841,7 @@ function resolvePendingTrick(state: GameSnapshot, trick: PendingTrick): void {
     return
   }
   if (trick.type === 'aoe') {
-    resolveAOE(state, trick.sourceId, trick.targets, trick.need, trick.name)
+    resolveAOE(state, trick.sourceId, trick.targets, trick.need, trick.name, trick.card)
     return
   }
   if (trick.type === 'guohe') {
@@ -858,11 +860,11 @@ function resolvePendingTrick(state: GameSnapshot, trick: PendingTrick): void {
     return
   }
   if (trick.type === 'juedou') {
-    resolveJuedou(state, trick.sourceId, trick.targetId)
+    resolveJuedou(state, trick.sourceId, trick.targetId, trick.card)
     return
   }
   if (trick.type === 'huogong') {
-    dealDamage(state, trick.targetId, 1, trick.sourceId, 'fire')
+    dealDamage(state, trick.targetId, 1, trick.sourceId, 'fire', trick.card)
     if (!isAwaitingZonePick(state)) setPlayPrompt(state)
     return
   }
@@ -1326,7 +1328,7 @@ function finishTargetedCard(
     }
     afterTrick(state, p)
     observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId, kind: 'juedou' })
-    beginWuxieWindow(state, { type: 'juedou', sourceId: playerId, targetId })
+    beginWuxieWindow(state, { type: 'juedou', sourceId: playerId, targetId, card })
     return
   }
 
@@ -1371,7 +1373,7 @@ function finishTargetedCard(
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【火攻】。`)
     afterTrick(state, p)
     observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId, kind: 'huogong' })
-    beginWuxieWindow(state, { type: 'huogong', sourceId: playerId, targetId })
+    beginWuxieWindow(state, { type: 'huogong', sourceId: playerId, targetId, card })
     return
   }
 
@@ -1646,7 +1648,7 @@ export function passResponse(state: GameSnapshot, playerId: number): void {
     const aoe = getAoeQueue(state)
     const src = aoe?.sourceId ?? state.currentPlayer
     log(state, `${state.players[playerId].name} 放棄出閃，受到傷害。`)
-    dealDamage(state, playerId, 1, src)
+    dealDamage(state, playerId, 1, src, 'normal', aoe?.card)
     if (!isAwaitingZonePick(state)) resumeAfterResponse(state)
     return
   }
@@ -1654,7 +1656,7 @@ export function passResponse(state: GameSnapshot, playerId: number): void {
     const aoe = getAoeQueue(state)
     const src = aoe?.sourceId ?? state.currentPlayer
     log(state, `${state.players[playerId].name} 放棄出殺，受到傷害。`)
-    dealDamage(state, playerId, 1, src)
+    dealDamage(state, playerId, 1, src, 'normal', aoe?.card)
     if (!isAwaitingZonePick(state)) resumeAfterResponse(state)
   }
 }
@@ -2241,6 +2243,25 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
     return
   }
 
+  if (key === 'jianxiong') {
+    const p = state.players[playerId]
+    const uid = state.prompt.cardUids?.[0]
+    if (choiceId === 'take' && uid) {
+      const idx = state.discard.findIndex((c) => c.uid === uid)
+      if (idx >= 0) {
+        const [got] = state.discard.splice(idx, 1)
+        p.hand.push(got)
+        log(state, `${p.name} 發動奸雄，獲得【${getCardDef(got.defId).name}】。`)
+      } else {
+        log(state, `${p.name} 發動奸雄，但該牌已不在棄牌堆。`)
+      }
+    } else {
+      log(state, `${p.name} 不發動奸雄。`)
+    }
+    resumeAfterDamageFlow(state)
+    return
+  }
+
   if (key === 'jiedao') {
     const ids = state.prompt.selectedTargetIds ?? []
     const sourceId = ids[0]
@@ -2319,6 +2340,7 @@ type AoeQueue = {
   targets: number[]
   need: 'sha' | 'shan'
   name: string
+  card?: CardInstance
 }
 
 function getAoeQueue(state: GameSnapshot): AoeQueue | undefined {
@@ -2335,12 +2357,14 @@ function resolveAOE(
   targets: number[],
   need: 'sha' | 'shan',
   name: string,
+  card?: CardInstance,
 ): void {
   ;(state as GameSnapshot & { _aoe?: AoeQueue })._aoe = {
     sourceId,
     targets: [...targets],
     need,
     name,
+    card,
   }
   resumeAfterResponse(state)
 }
@@ -2354,8 +2378,9 @@ function askAOEResponse(
 ): void {
   const target = state.players[targetId]
   const cards = responseCards(target, need)
+  const aoe = getAoeQueue(state)
   if (cards.length === 0) {
-    dealDamage(state, targetId, 1, sourceId)
+    dealDamage(state, targetId, 1, sourceId, 'normal', aoe?.card)
     log(state, `${target.name} 無法響應【${name}】，受到 1 點傷害。`)
     if (!isAwaitingZonePick(state)) resumeAfterResponse(state)
     return
@@ -2369,23 +2394,28 @@ function askAOEResponse(
   }
 }
 
-function resolveJuedou(state: GameSnapshot, a: number, b: number): void {
+function resolveJuedou(
+  state: GameSnapshot,
+  a: number,
+  b: number,
+  damageCard?: CardInstance,
+): void {
   // Simplified: each needs sha alternately; AI/human — deal damage to one who can't
   const pb = state.players[b]
   const cards = responseCards(pb, 'sha')
   if (cards.length === 0) {
-    if (dealDamage(state, b, 1, a)) return
+    if (dealDamage(state, b, 1, a, 'normal', damageCard)) return
   } else {
     const c = takeHand(state, b, cards[0].uid)!
     discardCard(state, c)
     const pa = state.players[a]
     const cardsA = responseCards(pa, 'sha')
     if (cardsA.length === 0) {
-      if (dealDamage(state, a, 1, b)) return
+      if (dealDamage(state, a, 1, b, 'normal', damageCard)) return
     } else {
       const c2 = takeHand(state, a, cardsA[0].uid)!
       discardCard(state, c2)
-      if (dealDamage(state, b, 1, a)) return
+      if (dealDamage(state, b, 1, a, 'normal', damageCard)) return
     }
   }
   checkVictory(state)
@@ -2666,7 +2696,9 @@ function finishZonePickSkill(state: GameSnapshot, skillId: string, _ids: string[
 function isAwaitingZonePick(state: GameSnapshot): boolean {
   return (
     state.prompt.kind === 'choice' &&
-    (state.prompt.choiceKey === 'zone_pick' || state.prompt.choiceKey === 'ganglie')
+    (state.prompt.choiceKey === 'zone_pick' ||
+      state.prompt.choiceKey === 'ganglie' ||
+      state.prompt.choiceKey === 'jianxiong')
   )
 }
 
@@ -2835,21 +2867,24 @@ function dealDamage(
 
   if (t.alive) {
     const skills = getGeneral(t.generalId).skills
-    // 奸雄：獲得造成傷害的牌，否則摸一張
+    // 奸雄：可選擇獲得造成傷害的牌（可拒絕）
     if (skills.includes('jianxiong') && sourceId !== null) {
-      let got = false
-      if (damageCard) {
-        const idx = state.discard.findIndex((c) => c.uid === damageCard.uid)
-        if (idx >= 0) {
-          state.discard.splice(idx, 1)
-          t.hand.push(damageCard)
-          got = true
-          log(state, `${t.name} 發動奸雄，獲得【${getCardDef(damageCard.defId).name}】。`)
+      const canTake =
+        !!damageCard && state.discard.some((c) => c.uid === damageCard.uid)
+      if (canTake && damageCard) {
+        const cname = getCardDef(damageCard.defId).name
+        state.prompt = {
+          kind: 'choice',
+          message: `【奸雄】是否獲得造成傷害的【${cname}】？`,
+          actorId: targetId,
+          choiceKey: 'jianxiong',
+          cardUids: [damageCard.uid],
+          choices: [
+            { id: 'take', label: `獲得【${cname}】` },
+            { id: 'skip', label: '不發動' },
+          ],
         }
-      }
-      if (!got) {
-        draw(state, targetId, 1)
-        log(state, `${t.name} 發動奸雄，摸一張牌。`)
+        return true
       }
     }
     // 反饋：選擇獲得傷害來源一張牌
@@ -2911,8 +2946,9 @@ export function debugDealDamage(
   amount: number,
   sourceId: number | null,
   nature: 'normal' | 'fire' | 'thunder' = 'normal',
+  damageCard?: CardInstance,
 ): boolean {
-  return dealDamage(state, targetId, amount, sourceId, nature)
+  return dealDamage(state, targetId, amount, sourceId, nature, damageCard)
 }
 
 function trySave(state: GameSnapshot, targetId: number, killerId: number | null = null): void {
