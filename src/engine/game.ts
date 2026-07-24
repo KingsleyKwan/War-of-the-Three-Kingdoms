@@ -4745,9 +4745,9 @@ export function activateSkill(state: GameSnapshot, playerId: number, skillId: st
 
   if (skillId === 'xiansi') {
     if ((p.niCards?.length ?? 0) < 2 || !mayUseSha(p)) return
-    const targets = state.players.filter(
-      (t) => t.alive && t.id !== playerId && canReach(state, playerId, t.id),
-    )
+    const targets = enemiesOf(state, playerId)
+      .map((id) => state.players[id])
+      .filter((t) => t && canReach(state, playerId, t.id))
     if (!targets.length) return
     state.prompt = {
       kind: 'choice',
@@ -4829,9 +4829,9 @@ export function activateSkill(state: GameSnapshot, playerId: number, skillId: st
   if (skillId === 'qiangxi') {
     if (p.qiangxiUsed) return
     const range = attackRangeOf(p)
-    const foes = state.players.filter(
-      (t) => t.alive && t.id !== playerId && getDistance(state, playerId, t.id) <= range,
-    )
+    const foes = enemiesOf(state, playerId)
+      .map((id) => state.players[id])
+      .filter((t) => t && getDistance(state, playerId, t.id) <= range)
     if (!foes.length) return
     const weaponChoices: { id: string; label: string }[] = []
     if (p.equips.weapon) {
@@ -4954,8 +4954,10 @@ export function activateSkill(state: GameSnapshot, playerId: number, skillId: st
   }
 
   if (skillId === 'tianyi' || skillId === 'quhu' || skillId === 'zhiba') {
+    const enemySet = new Set(enemiesOf(state, playerId))
     const targets = state.players.filter((t) => {
       if (!t.alive || t.id === playerId || !t.hand.length) return false
+      if (!enemySet.has(t.id)) return false
       if (skillId === 'quhu') return t.hp > p.hp
       if (skillId === 'zhiba') return !(p.zhibaUsedOn ?? []).includes(t.id)
       return true
@@ -4972,9 +4974,9 @@ export function activateSkill(state: GameSnapshot, playerId: number, skillId: st
   }
 
   if (skillId === 'tiaoxin') {
-    const targets = state.players.filter(
-      (t) => t.alive && t.id !== playerId && canReach(state, playerId, t.id),
-    )
+    const targets = enemiesOf(state, playerId)
+      .map((id) => state.players[id])
+      .filter((t) => t && canReach(state, playerId, t.id))
     if (!targets.length) return
     state.prompt = {
       kind: 'choice',
@@ -5003,7 +5005,9 @@ export function activateSkill(state: GameSnapshot, playerId: number, skillId: st
     if (p.luanwuUsed) return
     p.luanwuUsed = true
     log(state, `${p.name} 發動限定技【亂武】。`)
-    for (const target of state.players.filter((t) => t.alive && t.id !== playerId)) {
+    for (const tid of enemiesOf(state, playerId)) {
+      const target = state.players[tid]
+      if (!target?.alive) continue
       target.hp -= 1
       pushDamageFx(state, target.id, 1)
       log(state, `${target.name} 因亂武失去1點體力。`)
@@ -5447,8 +5451,16 @@ export function cancelTarget(state: GameSnapshot, playerId: number): void {
     (state.prompt.kind === 'choice' &&
       (state.prompt.choiceKey === 'fangtian_confirm' ||
         state.prompt.choiceKey === 'rende_target' ||
-        state.prompt.choiceKey === 'zhangba_target'))
+        state.prompt.choiceKey === 'zhangba_target' ||
+        state.prompt.choiceKey === 'qiangxi_cost' ||
+        state.prompt.choiceKey === 'qiangxi_target' ||
+        state.prompt.choiceKey === 'tiaoxin_target' ||
+        state.prompt.choiceKey === 'xiansi_target' ||
+        state.prompt.choiceKey === 'tianyi_target' ||
+        state.prompt.choiceKey === 'quhu_target' ||
+        state.prompt.choiceKey === 'zhiba_target'))
   ) {
+    delete (state as GameSnapshot & { _qiangxiCost?: string })._qiangxiCost
     setPlayPrompt(state)
   }
 }

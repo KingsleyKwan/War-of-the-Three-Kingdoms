@@ -1,7 +1,7 @@
 import { getGeneral } from '../data/generals'
 import { getCardDef } from '../data/cards'
 import type { GameSnapshot, PlayerState } from './types'
-import { attackRangeOf, canReach, getDistance, playerSkills } from './helpers'
+import { attackRangeOf, canReach, enemiesOf, getDistance, playerSkills } from './helpers'
 import { mayUseSha, weaponKind } from './weapons'
 
 export interface SkillAction {
@@ -35,8 +35,8 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
   }
   if (skills.includes('qiangxi') && !p.qiangxiUsed) {
     const range = attackRangeOf(p)
-    const foes = state.players.filter(
-      (t) => t.alive && t.id !== playerId && getDistance(state, playerId, t.id) <= range,
+    const foes = enemiesOf(state, playerId).filter(
+      (tid) => getDistance(state, playerId, tid) <= range,
     )
     const hasWeapon =
       !!p.equips.weapon ||
@@ -85,17 +85,20 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
     actions.push({ id: 'guhuo', label: '蠱惑', hint: '將一張手牌當殺、閃、桃或無中生有' })
   }
   if (skills.includes('tianyi') && !p.tianyiUsed && p.hand.length > 0) {
-    const targets = state.players.some((t) => t.alive && t.id !== playerId && t.hand.length > 0)
+    const targets = enemiesOf(state, playerId).some((tid) => state.players[tid]?.hand.length > 0)
     if (targets) actions.push({ id: 'tianyi', label: '天義', hint: '與一名角色拼點' })
   }
   if (skills.includes('quhu') && !p.quhuUsed && p.hand.length > 0) {
-    const targets = state.players.some(
-      (t) => t.alive && t.id !== playerId && t.hp > p.hp && t.hand.length > 0,
+    const targets = enemiesOf(state, playerId).some(
+      (tid) => (state.players[tid]?.hp ?? 0) > p.hp && (state.players[tid]?.hand.length ?? 0) > 0,
     )
     if (targets) actions.push({ id: 'quhu', label: '驅虎', hint: '與體力較高角色拼點' })
   }
   if (skills.includes('tiaoxin') && !p.tiaoxinUsed) {
-    actions.push({ id: 'tiaoxin', label: '挑釁', hint: '令攻擊範圍內角色出殺或棄牌' })
+    const foes = enemiesOf(state, playerId).filter((tid) => canReach(state, playerId, tid))
+    if (foes.length) {
+      actions.push({ id: 'tiaoxin', label: '挑釁', hint: '令攻擊範圍內角色出殺或棄牌' })
+    }
   }
   if (skills.includes('dimeng') && !p.dimengUsed && p.hand.length > 0) {
     actions.push({ id: 'dimeng', label: '締盟', hint: '棄手牌並交換兩名角色手牌' })
@@ -135,15 +138,11 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
     if (canSwap) actions.push({ id: 'ganlu', label: '甘露', hint: '交換兩名角色的裝備區' })
   }
   if (skills.includes('xiansi') && (p.niCards?.length ?? 0) >= 2 && mayUseSha(p)) {
-    const canHit = state.players.some(
-      (t) => t.alive && t.id !== playerId && canReach(state, playerId, t.id),
-    )
+    const canHit = enemiesOf(state, playerId).some((tid) => canReach(state, playerId, tid))
     if (canHit) actions.push({ id: 'xiansi', label: '陷嗣出殺', hint: '棄兩張「逆」，視為使用【殺】' })
   }
   if (weaponKind(p) === 'zhangba' && p.hand.length >= 2 && mayUseSha(p)) {
-    const canHit = state.players.some(
-      (t) => t.alive && t.id !== playerId && canReach(state, playerId, t.id),
-    )
+    const canHit = enemiesOf(state, playerId).some((tid) => canReach(state, playerId, tid))
     if (canHit) {
       actions.push({
         id: 'zhangba',

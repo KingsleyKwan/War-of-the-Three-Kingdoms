@@ -75,10 +75,22 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
       setSeatThought(state, playerId, `選擇：${id}`)
       resolveChoice(state, playerId, id)
     } else {
-      const fallback = prompt.choices?.[0]?.id
+      const key = prompt.choiceKey ?? ''
+      // Hostile-target skills: never fall back to seat 0 (often the human ally in story).
+      const noFallback =
+        key === 'qiangxi_target' ||
+        key === 'tiaoxin_target' ||
+        key === 'xiansi_target' ||
+        key === 'tianyi_target' ||
+        key === 'quhu_target' ||
+        key === 'zhiba_target'
+      const fallback = noFallback ? null : prompt.choices?.[0]?.id
       if (fallback) {
         setSeatThought(state, playerId, `選擇後備：${fallback}`)
         resolveChoice(state, playerId, fallback)
+      } else if (noFallback) {
+        setSeatThought(state, playerId, '無敵對目標，取消技能')
+        cancelTarget(state, playerId)
       }
     }
     return
@@ -566,7 +578,11 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
   }
   if (key === 'qiangxi_target') {
     const hostiles = ids.filter((id) => scoreAttackTarget(state, playerId, Number(id)) > 0)
-    return hostiles[0] ?? ids[0] ?? null
+    // Story teams already filter allies out of the list; still never prefer a −200 ally score.
+    if (hostiles.length) return hostiles[0]
+    const me = state.players[playerId]
+    if (me.side) return null
+    return ids[0] ?? null
   }
   if (key === 'qingnang_target' || key === 'jieyin_target') {
     // Prefer self if wounded, else ally
@@ -715,15 +731,26 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
     key === 'quhu_target' ||
     key === 'zhiba_target' ||
     key === 'tiaoxin_target' ||
+    key === 'xiansi_target' ||
+    key === 'luanwu_target'
+  ) {
+    const hostiles = ids.filter((id) => scoreAttackTarget(state, playerId, Number(id)) > 0)
+    return hostiles[0] ?? null
+  }
+  if (
     key === 'dimeng_target' ||
     key === 'fangzhu_target' ||
     key === 'tianxiang_target' ||
     key === 'yinghun_target' ||
-    key === 'fangquan_target' ||
-    key === 'luanwu_target'
+    key === 'fangquan_target'
   ) {
-    const hostiles = ids.filter((id) => scoreAttackTarget(state, playerId, Number(id)) > 0)
-    return hostiles[0] ?? ids[0] ?? null
+    // Supportive / transfer picks: prefer non-hostiles when available
+    const allies = ids.filter((id) => !believedHostile(state, playerId, Number(id)))
+    if (key === 'tianxiang_target' || key === 'fangzhu_target') {
+      const hostiles = ids.filter((id) => scoreAttackTarget(state, playerId, Number(id)) > 0)
+      return hostiles[0] ?? ids[0] ?? null
+    }
+    return allies[0] ?? ids[0] ?? null
   }
   return choices[0].id
 }
