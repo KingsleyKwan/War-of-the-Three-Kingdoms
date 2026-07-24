@@ -50,15 +50,19 @@ export function getCity(id: string): CampaignCity {
   return c
 }
 
-/** Inline SVG campaign map for a stage */
-export function renderCampaignMap(opts: {
+export interface CampaignMapOpts {
   title: string
   era: string
   battlefieldCityId: string
   cityFactions: Record<string, string>
   movements: MapMovement[]
   visibleCityIds?: string[]
-}): string {
+  /** Extra HTML for the intel column (forces, packs, etc.) */
+  intelExtraHtml?: string
+}
+
+/** Full-width theater: large map + side intel panels */
+export function renderCampaignMap(opts: CampaignMapOpts): string {
   const visible = new Set(
     opts.visibleCityIds ??
       Object.keys(opts.cityFactions).concat(
@@ -102,34 +106,69 @@ export function renderCampaignMap(opts: {
   const battle = getCity(opts.battlefieldCityId)
   const battleFaction = opts.cityFactions[opts.battlefieldCityId] ?? '未定'
 
+  const factionRows = cities
+    .map((c) => {
+      const faction = opts.cityFactions[c.id] ?? '未定'
+      const color = FACTION_COLORS[faction] ?? FACTION_COLORS['未定']
+      const isBattle = c.id === opts.battlefieldCityId
+      return `<li class="${isBattle ? 'is-battle' : ''}">
+        <span class="faction-dot" style="background:${color}"></span>
+        <span class="faction-city">${c.name}</span>
+        <span class="faction-owner">${faction}</span>
+        ${isBattle ? '<span class="faction-tag">戰場</span>' : ''}
+      </li>`
+    })
+    .join('')
+
+  const moveRows = opts.movements
+    .map(
+      (m) =>
+        `<li>
+          <strong>${m.actor}</strong>
+          <span class="move-path">${getCity(m.fromCityId).name} → ${getCity(m.toCityId).name}</span>
+          ${m.note ? `<span class="move-note">${m.note}</span>` : ''}
+        </li>`,
+    )
+    .join('')
+
   return `
-  <div class="campaign-map-wrap">
-    <div class="campaign-map-meta">
-      <span class="map-era">${opts.era}</span>
-      <span class="map-battle">戰場：${battle.name}（${battleFaction}）</span>
+  <div class="campaign-theater">
+    <div class="campaign-map-pane">
+      <svg class="campaign-map" viewBox="0 0 100 100" role="img" aria-label="${opts.title}戰略圖" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="map-arrowhead" markerWidth="5" markerHeight="5" refX="4.2" refY="2.5" orient="auto">
+            <path d="M0,0 L5,2.5 L0,5 Z" fill="#e8c56a" />
+          </marker>
+          <linearGradient id="map-land" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#2a2118"/>
+            <stop offset="100%" stop-color="#1a140e"/>
+          </linearGradient>
+        </defs>
+        <rect width="100" height="100" fill="url(#map-land)" rx="1.5" />
+        <path class="map-river" d="M18,30 Q35,38 48,52 T72,70" fill="none" />
+        ${arrows}
+        ${markers}
+      </svg>
     </div>
-    <svg class="campaign-map" viewBox="0 0 100 100" role="img" aria-label="${opts.title}戰略圖">
-      <defs>
-        <marker id="map-arrowhead" markerWidth="5" markerHeight="5" refX="4.2" refY="2.5" orient="auto">
-          <path d="M0,0 L5,2.5 L0,5 Z" fill="#e8c56a" />
-        </marker>
-        <linearGradient id="map-land" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#2a2118"/>
-          <stop offset="100%" stop-color="#1a140e"/>
-        </linearGradient>
-      </defs>
-      <rect width="100" height="100" fill="url(#map-land)" rx="1.5" />
-      <path class="map-river" d="M18,30 Q35,38 48,52 T72,70" fill="none" />
-      ${arrows}
-      ${markers}
-    </svg>
-    <ul class="map-legend">
-      ${opts.movements
-        .map(
-          (m) =>
-            `<li><strong>${m.actor}</strong>：${getCity(m.fromCityId).name} → ${getCity(m.toCityId).name}${m.note ? `（${m.note}）` : ''}</li>`,
-        )
-        .join('')}
-    </ul>
+    <aside class="campaign-intel" aria-label="戰局情報">
+      <header class="intel-head">
+        <p class="intel-kicker">戰局情報</p>
+        <h3>${opts.title}</h3>
+      </header>
+      <dl class="intel-facts">
+        <div><dt>年代</dt><dd>${opts.era}</dd></div>
+        <div><dt>戰場</dt><dd>${battle.name}</dd></div>
+        <div><dt>城屬</dt><dd>${battleFaction}</dd></div>
+      </dl>
+      <section class="intel-block">
+        <h4>城池勢力</h4>
+        <ul class="faction-list">${factionRows}</ul>
+      </section>
+      <section class="intel-block">
+        <h4>行軍動向</h4>
+        <ul class="map-legend">${moveRows}</ul>
+      </section>
+      ${opts.intelExtraHtml ?? ''}
+    </aside>
   </div>`
 }

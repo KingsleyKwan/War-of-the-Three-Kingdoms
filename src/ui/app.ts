@@ -359,6 +359,45 @@ function renderStageBrief(): string {
   const linkHtml = s.prevLink
     ? `<p class="story-bridge">${escapeHtml(s.prevLink)}</p>`
     : ''
+
+  const fixedAllies = s.allies.map((a) => {
+    if (a.name) return a.name
+    if (a.generalId === 'dianwei_proxy') return '典韋'
+    if (a.generalId === 'xunyu_proxy') return '荀彧'
+    return getGeneral(a.generalId).name
+  })
+  const enemyNames = s.enemies.map((e) => e.name ?? getGeneral(e.generalId).name)
+
+  const forcesHtml = `
+    <section class="intel-block">
+      <h4>參戰勢力</h4>
+      <div class="force-cols">
+        <div>
+          <p class="force-side">我方</p>
+          <ul class="force-list">
+            <li>曹操</li>
+            ${fixedAllies.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}
+            ${choices.length ? '<li class="force-pick">＋自選副將</li>' : ''}
+          </ul>
+        </div>
+        <div>
+          <p class="force-side foe">敵方</p>
+          <ul class="force-list">
+            ${enemyNames.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}
+          </ul>
+        </div>
+      </div>
+    </section>
+    <section class="intel-block">
+      <h4>關卡設定</h4>
+      <p class="intel-pack">卡包：${s.packs.includes('ex') ? '標準 + 軍爭' : '標準包'}</p>
+      <p class="intel-pack">勝利：${
+        s.victory.type === 'kill_target'
+          ? `擊殺 ${getGeneral(s.victory.targetGeneralId!).name}`
+          : '殲滅敵軍'
+      }</p>
+    </section>`
+
   const mapHtml = renderCampaignMap({
     title: s.title,
     era: s.era,
@@ -366,32 +405,38 @@ function renderStageBrief(): string {
     cityFactions: s.cityFactions,
     movements: s.movements,
     visibleCityIds: s.visibleCityIds,
+    intelExtraHtml: forcesHtml,
   })
   return `
-  <div class="screen panel-screen story-prologue">
-    <header class="topbar">
+  <div class="screen story-brief-screen">
+    <header class="topbar story-brief-top">
       <button type="button" class="btn ghost" data-back>返回</button>
-      <h2>${s.title}</h2>
+      <div class="story-brief-titles">
+        <p class="story-brief-kicker">${escapeHtml(s.era)}・第${s.index}關</p>
+        <h2>${s.title}</h2>
+        <p class="story-brief-sub">${escapeHtml(s.subtitle)}</p>
+      </div>
     </header>
     ${mapHtml}
-    <div class="story-scroll" aria-label="關卡劇情">
-      <div class="story-hand">${linkHtml}${storyHtml}</div>
-    </div>
-    <div class="panel story-ready">
-      <p class="meta">卡包：${s.packs.includes('ex') ? '標準 + 軍爭' : '標準包'}　・　${escapeHtml(s.era)}</p>
-      ${
-        choices.length
-          ? `<label class="field"><span>自選副將</span>
-            <select id="ally">${choices
-              .map((id) => {
-                const g = getGeneral(id === 'dianwei_proxy' ? 'xuchu' : id)
-                const label = id === 'dianwei_proxy' ? `${g.name}（代典韋）` : g.name
-                return `<option value="${id}" ${app.allyChoice === id ? 'selected' : ''}>${label}</option>`
-              })
-              .join('')}</select></label>`
-          : ''
-      }
-      <button type="button" class="btn primary" id="enter-stage">下一步</button>
+    <div class="story-brief-lower">
+      <div class="story-scroll" aria-label="關卡劇情">
+        <div class="story-hand">${linkHtml}${storyHtml}</div>
+      </div>
+      <div class="panel story-ready">
+        ${
+          choices.length
+            ? `<label class="field"><span>自選副將</span>
+              <select id="ally">${choices
+                .map((id) => {
+                  const g = getGeneral(id === 'dianwei_proxy' ? 'xuchu' : id)
+                  const label = id === 'dianwei_proxy' ? `${g.name}（代典韋）` : g.name
+                  return `<option value="${id}" ${app.allyChoice === id ? 'selected' : ''}>${label}</option>`
+                })
+                .join('')}</select></label>`
+            : '<p class="meta">確認戰局後進入戰鬥</p>'
+        }
+        <button type="button" class="btn primary" id="enter-stage">下一步</button>
+      </div>
     </div>
   </div>`
 }
@@ -1114,16 +1159,21 @@ function renderEpilogue(): string {
     visibleCityIds: s.visibleCityIds,
   })
   return `
-  <div class="screen panel-screen story-prologue epilogue-screen">
-    <header class="topbar">
-      <h2>${won ? '戰後・勝' : '戰後・敗'}・${s.title}</h2>
+  <div class="screen story-brief-screen epilogue-screen">
+    <header class="topbar story-brief-top">
+      <div class="story-brief-titles">
+        <p class="story-brief-kicker">${won ? '戰後・勝' : '戰後・敗'}・${escapeHtml(s.era)}</p>
+        <h2>${s.title}</h2>
+      </div>
     </header>
     ${mapHtml}
-    <div class="story-scroll" aria-label="戰後劇情">
-      <div class="story-hand">${storyHtml}</div>
-    </div>
-    <div class="panel story-ready">
-      <button type="button" class="btn primary" id="epilogue-next">下一步</button>
+    <div class="story-brief-lower">
+      <div class="story-scroll" aria-label="戰後劇情">
+        <div class="story-hand">${storyHtml}</div>
+      </div>
+      <div class="panel story-ready">
+        <button type="button" class="btn primary" id="epilogue-next">下一步</button>
+      </div>
     </div>
   </div>`
 }
