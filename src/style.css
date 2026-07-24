@@ -746,6 +746,26 @@ input {
   color: rgba(232, 220, 196, 0.8);
 }
 
+.battle-top-right {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.thinking.paused-banner {
+  color: var(--gold);
+  border-color: rgba(196, 163, 90, 0.45);
+}
+
+.table-screen.match-paused .hand,
+.table-screen.match-paused .skill-row,
+.table-screen.match-paused .choice-panel,
+.table-screen.match-paused .actions-main {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
 .phase {
   margin-left: 0.5rem;
   color: var(--gold);

@@ -22,14 +22,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** Drive AI until human input is required or game over, with think delay */
+/** Drive AI until human input is required, game over, or shouldStop. */
 export async function runAiUntilHuman(
   state: GameSnapshot,
   onTick?: () => void,
+  shouldStop?: () => boolean,
 ): Promise<void> {
   const delay = loadSettings().thinkDelayMs
   let guard = 0
   while (!state.winnerIds && guard++ < 200) {
+    if (shouldStop?.()) break
     const actorId = state.prompt.actorId
     if (actorId === null || state.prompt.kind === 'idle' || state.prompt.kind === 'game_over') {
       break
@@ -38,6 +40,7 @@ export async function runAiUntilHuman(
     if (actor.isHuman) break
     onTick?.()
     if (delay > 0) await sleep(delay)
+    if (shouldStop?.()) break
     if (state.winnerIds) break
     const again = state.prompt.actorId
     if (again === null) break
@@ -46,6 +49,7 @@ export async function runAiUntilHuman(
     onTick?.()
     // Hold so play card / damage FX stay visible before next action
     if (delay > 0 && !state.winnerIds) {
+      if (shouldStop?.()) break
       const next = state.prompt.actorId
       if (next !== null && !state.players[next]?.isHuman) {
         await sleep(Math.min(delay, 900))

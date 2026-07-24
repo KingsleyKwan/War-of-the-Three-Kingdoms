@@ -49,6 +49,8 @@ interface AppState {
   fxSettledSeq: number | null
   /** Stay on table after victory so last move is visible */
   matchEndPending: boolean
+  /** User paused the match (AI and play held) */
+  matchPaused: boolean
 }
 
 const app: AppState = {
@@ -64,6 +66,7 @@ const app: AppState = {
   aiBusy: false,
   fxSettledSeq: null,
   matchEndPending: false,
+  matchPaused: false,
 }
 
 const root = () => document.querySelector<HTMLDivElement>('#app')!
@@ -295,6 +298,7 @@ async function startFreeMatch(): Promise<void> {
   app.selectedUid = null
   app.fxSettledSeq = null
   app.matchEndPending = false
+  app.matchPaused = false
   app.stage = null
   app.screen = 'table'
   render()
@@ -459,6 +463,7 @@ async function startStageMatch(): Promise<void> {
   app.selectedUid = null
   app.fxSettledSeq = null
   app.matchEndPending = false
+  app.matchPaused = false
   app.screen = 'table'
   render()
   await continueAi()
@@ -498,24 +503,35 @@ function renderTable(): string {
   const prompt = g.prompt
   const picking = g.matchPhase === 'pick_general'
   const matchEnded = !!g.winnerIds
-  const isHumanTurn = prompt.actorId === human.id && !app.aiBusy && !picking && !matchEnded
+  const isHumanTurn =
+    prompt.actorId === human.id && !app.aiBusy && !picking && !matchEnded && !app.matchPaused
   const n = g.players.length
   const thinking =
     !matchEnded &&
+    !app.matchPaused &&
     app.aiBusy &&
     prompt.actorId !== null &&
     !g.players[prompt.actorId]?.isHuman
       ? `<div class="thinking">${escapeHtml(g.players[prompt.actorId].name)} 思考中…</div>`
-      : ''
+      : app.matchPaused
+        ? `<div class="thinking paused-banner">對局已暫停</div>`
+        : ''
 
   return `
-  <div class="screen table-screen ${matchEnded ? 'match-ended' : ''}">
+  <div class="screen table-screen ${matchEnded ? 'match-ended' : ''} ${app.matchPaused ? 'match-paused' : ''}">
     <header class="battle-top">
       <div>
         <strong>${picking ? '選將階段' : `第 ${g.round} 輪`}</strong>
         <span class="phase">${picking ? '請選擇武將' : phaseName(g.phase)}</span>
       </div>
-      <div class="deck-info">${picking ? `座位 ${n} 人` : `牌堆 ${g.deck.length}　棄牌 ${g.discard.length}`}</div>
+      <div class="battle-top-right">
+        <div class="deck-info">${picking ? `座位 ${n} 人` : `牌堆 ${g.deck.length}　棄牌 ${g.discard.length}`}</div>
+        ${
+          !matchEnded
+            ? `<button type="button" class="btn ghost" id="pause-match">${app.matchPaused ? '繼續' : '暫停'}</button>`
+            : ''
+        }
+      </div>
     </header>
     ${thinking}
     <div class="arena" style="--n:${n}" id="arena">
@@ -956,7 +972,7 @@ function cardDetailHtml(uid: string, handOf: PlayerState): string {
 
 async function continueAi(): Promise<void> {
   const g = app.game
-  if (!g || app.aiBusy) return
+  if (!g || app.aiBusy || app.matchPaused) return
   if (g.matchPhase === 'pick_general') return
   // Brief pause after action so card FX is visible, then clear when resolved
   if (g.fx.play || g.fx.damages.length) {
@@ -964,6 +980,11 @@ async function continueAi(): Promise<void> {
     render()
     const hold = Math.min(Math.max(app.settings.thinkDelayMs, 500), 1000)
     await new Promise((r) => setTimeout(r, hold))
+    if (app.matchPaused) {
+      app.aiBusy = false
+      render()
+      return
+    }
     if (isEffectResolved(g) && !g.winnerIds) clearPlayFx(g)
     app.aiBusy = false
     render()
@@ -973,14 +994,23 @@ async function continueAi(): Promise<void> {
     render()
     return
   }
+  if (app.matchPaused) return
   app.aiBusy = true
   render()
   try {
-    await runAiUntilHuman(g, () => {
-      if (app.screen === 'table' && app.game === g) render()
-    })
+    await runAiUntilHuman(
+      g,
+      () => {
+        if (app.screen === 'table' && app.game === g) render()
+      },
+      () => app.matchPaused,
+    )
   } finally {
     app.aiBusy = false
+  }
+  if (app.matchPaused) {
+    render()
+    return
   }
   // Keep last-move FX visible when the match just ended
   if (isEffectResolved(g) && !g.winnerIds) clearPlayFx(g)
@@ -1131,11 +1161,23 @@ function bindTable(): void {
     render()
   })
 
+  root().querySelector('#pause-match')?.addEventListener('click', () => {
+    if (app.matchPaused) {
+      app.matchPaused = false
+      render()
+      void continueAi()
+      return
+    }
+    app.matchPaused = true
+    render()
+  })
+
   root().querySelector('#flee')?.addEventListener('click', () => {
     if (!window.confirm('確定要退出對局嗎？進度不會保存。')) return
     app.game = null
     app.aiBusy = false
     app.matchEndPending = false
+    app.matchPaused = false
     app.screen = app.stage ? 'story' : 'start'
     render()
   })
