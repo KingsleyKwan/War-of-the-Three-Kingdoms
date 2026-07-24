@@ -26,7 +26,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     title: '潁川之戰',
     subtitle: '黃巾餘黨',
     briefing:
-      '中平元年，黃巾餘黨盤據潁川。曹操率部征討，先破張角麾下精銳，以立軍威。\n（E殺·曹操傳風格關卡・第1關）',
+      '中平元年，黃巾餘黨盤據潁川。夜色沉沉，營火遠近明滅。\n曹操勒馬陣前，望見敵旌上「張角」二字，心中暗忖：此戰若不能速勝，黃巾勢必復燃。\n「傳令——全軍聽令，破敵立威！」\n鼓聲驟起，鐵騎踏破荒草，直指敵陣。',
     packs: ['standard'],
     playerGeneralId: 'caocao',
     allies: [],
@@ -42,7 +42,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     title: '汜水關之戰',
     subtitle: '討董先鋒',
     briefing:
-      '關東聯軍討伐董卓，華雄於汜水關前耀武揚威。曹操親率精銳試探敵鋒，務求斬將奪旗。\n（E殺·曹操傳風格關卡・第2關）',
+      '關東聯軍討董，汜水關前卻連折數將。華雄刀下無人能敵，軍中人人色變。\n曹操拍案而起：「華雄不過一偏將耳！我願親往，試其鋒銳。」\n夜霧未散，關前號角低鳴。此行只為斬將奪旗，以振聯軍士氣。',
     packs: ['standard'],
     playerGeneralId: 'caocao',
     allies: [{ generalId: 'xiahoudun' }],
@@ -60,7 +60,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     title: '濮陽之戰',
     subtitle: '呂布來攻',
     briefing:
-      '呂布奪兗州，兵臨濮陽。曹操與典韋、許褚死守城池，務必擊退呂布軍。\n（E殺·曹操傳風格關卡・第3關）',
+      '呂布奪兗州，鐵騎直逼濮陽。城頭風急，旗角撕裂如紙。\n曹操與典韋、許褚立於垛口，望見呂布赤兔如電，心知此戰不可退。\n「守住城池——今夜，濮陽不能落！」\n箭雨將至，城門緊閉，決戰開始。',
     packs: ['standard', 'ex'],
     playerGeneralId: 'caocao',
     allies: [{ generalId: 'xuchu' }],

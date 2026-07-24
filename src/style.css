@@ -310,9 +310,111 @@ input {
   margin-top: 0;
 }
 
+.story-prologue {
+  max-width: 42rem;
+}
+
+.story-scroll {
+  margin: 0.35rem 0 1rem;
+  padding: 1.35rem 1.25rem 1.5rem;
+  background:
+    linear-gradient(180deg, rgba(58, 44, 28, 0.55), rgba(36, 26, 16, 0.72)),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 27px,
+      rgba(196, 163, 90, 0.06) 27px,
+      rgba(196, 163, 90, 0.06) 28px
+    );
+  border: 1px solid rgba(196, 163, 90, 0.35);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.25);
+  border-radius: 2px;
+}
+
+.story-hand {
+  font-family: 'Ma Shan Zheng', 'KaiTi', 'STKaiti', 'DFKai-SB', cursive;
+  font-size: clamp(1.35rem, 4.2vw, 1.75rem);
+  line-height: 1.95;
+  letter-spacing: 0.08em;
+  color: rgba(255, 244, 214, 0.92);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.story-hand p {
+  margin: 0 0 1.1em;
+}
+
+.story-hand p:last-child {
+  margin-bottom: 0;
+}
+
+.story-ready {
+  margin-top: 0;
+}
+
 .meta {
   color: var(--gold);
   font-size: 0.9rem;
+}
+
+.match-end-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(8, 6, 4, 0.45);
+  backdrop-filter: blur(2px);
+  animation: match-end-in 0.35s ease-out;
+}
+
+@keyframes match-end-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.match-end-card {
+  width: min(22rem, 100%);
+  padding: 1.4rem 1.25rem 1.25rem;
+  text-align: center;
+  background: linear-gradient(165deg, rgba(52, 40, 26, 0.96), rgba(28, 20, 12, 0.98));
+  border: 1px solid rgba(196, 163, 90, 0.45);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  border-radius: 4px;
+}
+
+.match-end-kicker {
+  margin: 0 0 0.35rem;
+  color: var(--gold);
+  font-size: 0.85rem;
+  letter-spacing: 0.2em;
+}
+
+.match-end-card h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1.85rem;
+  color: rgba(255, 244, 214, 0.95);
+}
+
+.match-end-msg {
+  margin: 0 0 1.15rem;
+  color: rgba(232, 220, 196, 0.78);
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.table-screen.match-ended .actions,
+.table-screen.match-ended .hand,
+.table-screen.match-ended .skill-row,
+.table-screen.match-ended .choice-panel {
+  pointer-events: none;
+  opacity: 0.55;
 }
 
 .table-screen {

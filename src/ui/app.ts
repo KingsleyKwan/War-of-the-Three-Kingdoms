@@ -45,6 +45,8 @@ interface AppState {
   aiBusy: boolean
   /** Play FX seq that already ran its enter animation (avoid remount double-play) */
   fxSettledSeq: number | null
+  /** Stay on table after victory so last move is visible */
+  matchEndPending: boolean
 }
 
 const app: AppState = {
@@ -59,6 +61,7 @@ const app: AppState = {
   detailHtml: null,
   aiBusy: false,
   fxSettledSeq: null,
+  matchEndPending: false,
 }
 
 const root = () => document.querySelector<HTMLDivElement>('#app')!
@@ -284,6 +287,8 @@ async function startFreeMatch(): Promise<void> {
   })
   app.game = createMatch(config)
   app.selectedUid = null
+  app.fxSettledSeq = null
+  app.matchEndPending = false
   app.stage = null
   app.screen = 'table'
   render()
@@ -340,14 +345,21 @@ function bindStoryList(): void {
 function renderStageBrief(): string {
   const s = app.stage!
   const choices = s.allyChoices ?? []
+  const storyHtml = escapeHtml(s.briefing)
+    .split(/\n+/)
+    .filter(Boolean)
+    .map((line) => `<p>${line}</p>`)
+    .join('')
   return `
-  <div class="screen panel-screen">
+  <div class="screen panel-screen story-prologue">
     <header class="topbar">
       <button type="button" class="btn ghost" data-back>返回</button>
       <h2>${s.title}</h2>
     </header>
-    <div class="panel">
-      <p class="briefing">${escapeHtml(s.briefing).replace(/\n/g, '<br/>')}</p>
+    <div class="story-scroll" aria-label="關卡劇情">
+      <div class="story-hand">${storyHtml}</div>
+    </div>
+    <div class="panel story-ready">
       <p class="meta">卡包：${s.packs.includes('ex') ? '標準 + 軍爭' : '標準包'}</p>
       ${
         choices.length
@@ -361,7 +373,7 @@ function renderStageBrief(): string {
               .join('')}</select></label>`
           : ''
       }
-      <button type="button" class="btn primary" id="enter-stage">進入戰鬥</button>
+      <button type="button" class="btn primary" id="enter-stage">下一步</button>
     </div>
   </div>`
 }
@@ -382,6 +394,8 @@ async function startStageMatch(): Promise<void> {
   const config = buildStageMatch(app.stage!, app.allyChoice ?? undefined)
   app.game = createMatch(config)
   app.selectedUid = null
+  app.fxSettledSeq = null
+  app.matchEndPending = false
   app.screen = 'table'
   render()
   await continueAi()
@@ -403,20 +417,36 @@ function identityLabelVisible(p: PlayerState, viewer: PlayerState, mode: GameMod
   return '？'
 }
 
+function renderMatchEndOverlay(g: GameSnapshot): string {
+  const humanWin = g.winnerIds!.includes(0)
+  return `<div class="match-end-overlay" role="dialog" aria-modal="true" aria-labelledby="match-end-title">
+    <div class="match-end-card">
+      <p class="match-end-kicker">${humanWin ? '我方勝' : '敵方勝'}</p>
+      <h2 id="match-end-title">${humanWin ? '勝利' : '敗北'}</h2>
+      <p class="match-end-msg">${escapeHtml(g.resultMessage ?? '')}</p>
+      <button type="button" class="btn primary" id="ack-match-end">下一步</button>
+    </div>
+  </div>`
+}
+
 function renderTable(): string {
   const g = app.game!
   const human = g.players.find((p) => p.isHuman)!
   const prompt = g.prompt
   const picking = g.matchPhase === 'pick_general'
-  const isHumanTurn = prompt.actorId === human.id && !app.aiBusy && !picking
+  const matchEnded = !!g.winnerIds
+  const isHumanTurn = prompt.actorId === human.id && !app.aiBusy && !picking && !matchEnded
   const n = g.players.length
   const thinking =
-    app.aiBusy && prompt.actorId !== null && !g.players[prompt.actorId]?.isHuman
+    !matchEnded &&
+    app.aiBusy &&
+    prompt.actorId !== null &&
+    !g.players[prompt.actorId]?.isHuman
       ? `<div class="thinking">${escapeHtml(g.players[prompt.actorId].name)} 思考中…</div>`
       : ''
 
   return `
-  <div class="screen table-screen">
+  <div class="screen table-screen ${matchEnded ? 'match-ended' : ''}">
     <header class="battle-top">
       <div>
         <strong>${picking ? '選將階段' : `第 ${g.round} 輪`}</strong>
@@ -577,6 +607,7 @@ function renderTable(): string {
         <button type="button" class="btn ghost danger" id="flee">退出對局</button>
       </div>
     </div>
+    ${matchEnded ? renderMatchEndOverlay(g) : ''}
   </div>`
 }
 
@@ -853,9 +884,14 @@ async function continueAi(): Promise<void> {
     render()
     const hold = Math.min(Math.max(app.settings.thinkDelayMs, 500), 1000)
     await new Promise((r) => setTimeout(r, hold))
-    if (isEffectResolved(g)) clearPlayFx(g)
+    if (isEffectResolved(g) && !g.winnerIds) clearPlayFx(g)
     app.aiBusy = false
     render()
+  }
+  if (g.winnerIds) {
+    maybeFinish()
+    render()
+    return
   }
   app.aiBusy = true
   render()
@@ -866,7 +902,8 @@ async function continueAi(): Promise<void> {
   } finally {
     app.aiBusy = false
   }
-  if (isEffectResolved(g)) clearPlayFx(g)
+  // Keep last-move FX visible when the match just ended
+  if (isEffectResolved(g) && !g.winnerIds) clearPlayFx(g)
   maybeFinish()
   render()
 }
@@ -1008,10 +1045,17 @@ function bindTable(): void {
     render()
   })
 
+  root().querySelector('#ack-match-end')?.addEventListener('click', () => {
+    app.matchEndPending = false
+    app.screen = 'result'
+    render()
+  })
+
   root().querySelector('#flee')?.addEventListener('click', () => {
     if (!window.confirm('確定要退出對局嗎？進度不會保存。')) return
     app.game = null
     app.aiBusy = false
+    app.matchEndPending = false
     app.screen = app.stage ? 'story' : 'start'
     render()
   })
@@ -1019,13 +1063,18 @@ function bindTable(): void {
 
 function maybeFinish(): void {
   const g = app.game
-  if (g?.winnerIds) {
+  if (!g?.winnerIds) {
+    app.matchEndPending = false
+    return
+  }
+  if (!app.matchEndPending) {
     if (g.config.campaignStageId && g.winnerIds.includes(0)) {
       const stage = CAOCAO_STAGES.find((s) => s.id === g.config.campaignStageId)
       if (stage) unlockNextStage(stage.index)
     }
-    app.screen = 'result'
+    app.matchEndPending = true
   }
+  // Stay on the table so the last move remains visible; result opens on 「下一步」
 }
 
 function renderResult(): string {
