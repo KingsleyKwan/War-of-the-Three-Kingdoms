@@ -742,10 +742,32 @@ input {
 }
 
 .equip {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.12rem;
   font-size: 0.68rem;
   color: rgba(232, 220, 196, 0.55);
   line-height: 1.25;
   min-height: 1.5em;
+  margin-top: 0.15rem;
+}
+
+.equip .eq-line {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.equip .eq-weapon em {
+  font-style: normal;
+  color: rgba(196, 163, 90, 0.9);
+  margin-left: 0.15rem;
+}
+
+.equip .eq-horse {
+  color: rgba(160, 190, 150, 0.85);
 }
 
 .meta-row {

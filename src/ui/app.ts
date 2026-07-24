@@ -683,12 +683,27 @@ function hearts(hp: number, max: number): string {
 }
 
 function equipText(p: PlayerState): string {
-  const parts: string[] = []
-  for (const slot of ['weapon', 'armor', 'horseMinus', 'horsePlus'] as const) {
-    const e = p.equips[slot]
-    if (e) parts.push(getCardDef(e.defId).name)
+  const lines: string[] = []
+  if (p.equips.weapon) {
+    const def = getCardDef(p.equips.weapon.defId)
+    const range = def.attackRange ?? 1
+    lines.push(
+      `<span class="eq-line eq-weapon">${escapeHtml(def.name)} <em>攻${range}</em></span>`,
+    )
   }
-  return parts.length ? parts.join('・') : '無裝備'
+  if (p.equips.armor) {
+    const def = getCardDef(p.equips.armor.defId)
+    lines.push(`<span class="eq-line eq-armor">${escapeHtml(def.name)}</span>`)
+  }
+  if (p.equips.horseMinus) {
+    const def = getCardDef(p.equips.horseMinus.defId)
+    lines.push(`<span class="eq-line eq-horse">-1 ${escapeHtml(def.name)}</span>`)
+  }
+  if (p.equips.horsePlus) {
+    const def = getCardDef(p.equips.horsePlus.defId)
+    lines.push(`<span class="eq-line eq-horse">+1 ${escapeHtml(def.name)}</span>`)
+  }
+  return lines.length ? lines.join('') : '無裝備'
 }
 
 function phaseName(p: string): string {
@@ -718,7 +733,12 @@ function seatDetailHtml(p: PlayerState): string {
       const e = p.equips[slot]
       if (!e) return null
       const def = getCardDef(e.defId)
-      return `<li><strong>${def.name}</strong>（${suitName(def.suit)}${rankLabel(def.rank)}）<br/><span class="muted">${CARD_HELP[def.kind] ?? ''}</span></li>`
+      let tag = ''
+      if (slot === 'weapon') tag = `攻擊範圍 ${def.attackRange ?? 1}`
+      else if (slot === 'horseMinus') tag = '-1 坐騎（與其他角色距離-1）'
+      else if (slot === 'horsePlus') tag = '+1 坐騎（其他角色與你距離+1）'
+      else if (slot === 'armor') tag = '防具'
+      return `<li><strong>${escapeHtml(def.name)}</strong>（${suitName(def.suit)}${rankLabel(def.rank)}）· ${tag}<br/><span class="muted">${CARD_HELP[def.kind] ?? ''}</span></li>`
     })
     .filter(Boolean)
     .join('')
