@@ -106,6 +106,7 @@ function render(): void {
     case 'table':
       el.innerHTML = renderTable()
       bindTable()
+      scrollLogToLatest()
       break
     case 'epilogue':
       el.innerHTML = renderEpilogue()
@@ -686,10 +687,6 @@ function renderTable(): string {
             .join('')}</div>`
         : ''
     }
-    <div class="log">${[...g.log]
-      .slice(-6)
-      .map((l) => `<div>${colorizeSeatNamesInText(l.text, namedSeats)}</div>`)
-      .join('')}</div>
     ${
       picking
         ? ''
@@ -721,6 +718,13 @@ function renderTable(): string {
         .join('')}
     </div>`
     }
+    <div class="log" aria-live="polite">${[...g.log]
+      .slice(-8)
+      .map((l, i, arr) => {
+        const latest = i === arr.length - 1
+        return `<div class="${latest ? 'log-latest' : ''}">${colorizeSeatNamesInText(l.text, namedSeats)}</div>`
+      })
+      .join('')}</div>
     <div class="actions">
       <div class="actions-main">
       ${
@@ -1101,6 +1105,16 @@ function isEffectResolved(g: GameSnapshot): boolean {
     k === 'idle' ||
     k === 'choose_general'
   )
+}
+
+function scrollLogToLatest(): void {
+  const logEl = root().querySelector('.log')
+  if (!logEl) return
+  const latest = logEl.querySelector('.log-latest')
+  if (latest) {
+    latest.scrollIntoView({ block: 'nearest', behavior: 'instant' as ScrollBehavior })
+  }
+  logEl.scrollTop = logEl.scrollHeight
 }
 
 function bindTable(): void {
