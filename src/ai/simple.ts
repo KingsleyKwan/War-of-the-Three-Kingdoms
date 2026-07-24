@@ -3,6 +3,7 @@ import {
   getPlayKindOptions,
   passResponse,
   playableCards,
+  resolveChoice,
   selectCard,
   selectTarget,
   clearPlayFx,
@@ -58,6 +59,11 @@ export async function runAiUntilHuman(
 
 function stepAi(state: GameSnapshot, playerId: number): void {
   const prompt = state.prompt
+  if (prompt.kind === 'choice') {
+    const id = pickChoice(state, playerId)
+    if (id) resolveChoice(state, playerId, id)
+    return
+  }
   if (prompt.kind === 'respond_shan' || prompt.kind === 'respond_sha') {
     const uids = prompt.cardUids ?? []
     if (uids.length) selectCard(state, playerId, uids[0])
@@ -141,4 +147,31 @@ function scorePlay(state: GameSnapshot, playerId: number, uid: string, asKind?: 
   if (kind === 'huogong') return 9
   if (kind === 'taoyuan') return 8
   return 1
+}
+
+function pickChoice(state: GameSnapshot, playerId: number): string | null {
+  const choices = state.prompt.choices ?? []
+  if (!choices.length) return null
+  const key = state.prompt.choiceKey
+  const ids = choices.map((c) => c.id)
+
+  if (key === 'qilingong') {
+    return ids.find((id) => id === 'horsePlus') ?? ids.find((id) => id === 'horseMinus') ?? 'skip'
+  }
+  if (key === 'hanbing') {
+    const tid = state.prompt.targetIds?.[0] ?? state.pending?.targetId
+    const t = tid !== undefined ? state.players[tid] : null
+    // Prefer discard cards if target has stuff and isn't about to die from 1 dmg only when high value
+    if (t && (t.hand.length > 0 || t.equips.weapon || t.equips.armor || t.equips.horseMinus || t.equips.horsePlus)) {
+      return 'yes'
+    }
+    return 'no'
+  }
+  if (key === 'qinglong') return ids.includes('yes') ? 'yes' : 'no'
+  if (key === 'guanshi') return ids.includes('yes') ? 'yes' : 'no'
+  if (key === 'cixiong') {
+    const p = state.players[playerId]
+    return p.hand.length > 2 ? 'discard' : 'draw'
+  }
+  return choices[0].id
 }

@@ -62,7 +62,13 @@ export type PromptKind =
   | 'respond_shan'
   | 'respond_sha'
   | 'discard'
+  | 'choice'
   | 'game_over'
+
+export interface ChoiceOption {
+  id: string
+  label: string
+}
 
 export interface PromptState {
   kind: PromptKind
@@ -80,6 +86,10 @@ export interface PromptState {
   respondKinds?: string[]
   /** How many to discard */
   discardCount?: number
+  /** Optional multi-choice (weapon / skill triggers) */
+  choices?: ChoiceOption[]
+  /** Opaque context for resolveChoice */
+  choiceKey?: string
 }
 
 export interface LogEntry {

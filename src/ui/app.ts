@@ -18,6 +18,7 @@ import {
   createMatch,
   endPlayPhase,
   passResponse,
+  resolveChoice,
   selectCard,
   selectTarget,
 } from '../engine/game'
@@ -449,6 +450,7 @@ function renderTable(): string {
         : prompt.message || '等待中…',
     )}</div>
     ${picking ? renderGeneralPickPanel(g) : ''}
+    ${!picking && prompt.kind === 'choice' ? renderChoicePanel(g) : ''}
     <div class="log">${[...g.log]
       .slice(-6)
       .map((l) => `<div>${escapeHtml(l.text)}</div>`)
@@ -503,6 +505,21 @@ function renderTable(): string {
           : ''
       }
       <button type="button" class="btn ghost" id="flee">退出</button>
+    </div>
+  </div>`
+}
+
+function renderChoicePanel(g: GameSnapshot): string {
+  const choices = g.prompt.choices ?? []
+  return `<div class="choice-panel">
+    <h3>${escapeHtml(g.prompt.message)}</h3>
+    <div class="choice-row">
+      ${choices
+        .map(
+          (c) =>
+            `<button type="button" class="btn ${c.id === 'skip' || c.id === 'no' ? 'ghost' : 'primary'}" data-choice="${c.id}">${escapeHtml(c.label)}</button>`,
+        )
+        .join('')}
     </div>
   </div>`
 }
@@ -742,6 +759,15 @@ function isEffectResolved(g: GameSnapshot): boolean {
 function bindTable(): void {
   const g = app.game!
   const human = g.players.find((p) => p.isHuman)!
+
+  root().querySelectorAll('[data-choice]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (app.aiBusy || g.prompt.kind !== 'choice' || g.prompt.actorId !== human.id) return
+      const id = (btn as HTMLElement).dataset.choice!
+      resolveChoice(g, human.id, id)
+      void continueAi()
+    })
+  })
 
   root().querySelectorAll('[data-gen-info]').forEach((btn) => {
     btn.addEventListener('click', () => {
