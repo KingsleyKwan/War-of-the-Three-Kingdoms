@@ -2300,6 +2300,38 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
     return
   }
 
+  if (key === 'dying_save') {
+    const d = getDying(state)
+    if (!d) {
+      setPlayPrompt(state)
+      return
+    }
+    const dying = state.players[d.targetId]
+    const saver = state.players[playerId]
+    if (choiceId === 'skip') {
+      log(state, `${saver.name} 不出【桃】。`)
+      continueDyingAsk(state)
+      return
+    }
+    const uid = choiceId
+    if (!(state.prompt.cardUids ?? []).includes(uid)) return
+    const card = takeHand(state, playerId, uid)
+    if (!card) return
+    discardCard(state, card)
+    const def = getCardDef(card.defId)
+    const asJijiu = cardKind(card) !== 'tao'
+    dying.hp += 1
+    d.savedThisRound = true
+    log(
+      state,
+      asJijiu
+        ? `${saver.name} 發動急救，將【${def.name}】當【桃】使用，${dying.name} 體力回覆至 ${dying.hp}。`
+        : `${saver.name} 對 ${dying.name} 使用【桃】，體力回覆至 ${dying.hp}。`,
+    )
+    continueDyingAsk(state)
+    return
+  }
+
   if (key === 'jiedao') {
     const ids = state.prompt.selectedTargetIds ?? []
     const sourceId = ids[0]
@@ -2760,13 +2792,16 @@ function isAwaitingZonePick(state: GameSnapshot): boolean {
     (state.prompt.choiceKey === 'zone_pick' ||
       state.prompt.choiceKey === 'ganglie' ||
       state.prompt.choiceKey === 'jianxiong' ||
-      state.prompt.choiceKey === 'yaowu')
+      state.prompt.choiceKey === 'yaowu' ||
+      state.prompt.choiceKey === 'dying_save')
   )
 }
 
 function resumeAfterDamageFlow(state: GameSnapshot): void {
   checkVictory(state)
   if (state.winnerIds) return
+
+  if (startDyingIfPending(state)) return
 
   const dodged = (state as GameSnapshot & { _shaDodged?: { sourceId: number; targetId: number } })
     ._shaDodged
@@ -2924,7 +2959,9 @@ function dealDamage(
   }
 
   if (t.hp <= 0) {
-    trySave(state, targetId, sourceId)
+    ;(state as GameSnapshot & {
+      _pendingDying?: { targetId: number; killerId: number | null }
+    })._pendingDying = { targetId, killerId: sourceId }
   }
 
   if (t.alive) {
@@ -3022,6 +3059,8 @@ function dealDamage(
     return true
   }
 
+  if (startDyingIfPending(state)) return true
+
   checkVictory(state)
   return false
 }
@@ -3039,69 +3078,230 @@ export function debugDealDamage(
 }
 
 function trySave(state: GameSnapshot, targetId: number, killerId: number | null = null): void {
+  ;(state as GameSnapshot & {
+    _pendingDying?: { targetId: number; killerId: number | null }
+  })._pendingDying = { targetId, killerId }
+  startDyingIfPending(state)
+}
+
+type DyingState = {
+  targetId: number
+  killerId: number | null
+  /** Next seat to consider */
+  cursor: number
+  /** Seat where this ask round started */
+  startSeat: number
+  /** Seats examined in the current ask round */
+  checked: number
+  /** Someone used 桃 this round */
+  savedThisRound: boolean
+}
+
+function getDying(state: GameSnapshot): DyingState | undefined {
+  return (state as GameSnapshot & { _dying?: DyingState })._dying
+}
+
+function clearDying(state: GameSnapshot): void {
+  delete (state as GameSnapshot & { _dying?: DyingState })._dying
+}
+
+function getPendingDying(
+  state: GameSnapshot,
+): { targetId: number; killerId: number | null } | undefined {
+  return (state as GameSnapshot & {
+    _pendingDying?: { targetId: number; killerId: number | null }
+  })._pendingDying
+}
+
+function clearPendingDying(state: GameSnapshot): void {
+  delete (state as GameSnapshot & {
+    _pendingDying?: { targetId: number; killerId: number | null }
+  })._pendingDying
+}
+
+/** Cards that can save in dying: 【桃】 or 華佗急救（紅牌當桃）. */
+function saveCardsFor(p: PlayerState): CardInstance[] {
+  return responseCards(p, 'tao')
+}
+
+/**
+ * If someone is pending 瀕死 and not already in a save window, start asking for 桃.
+ * @returns true if a dying window is now active
+ */
+function startDyingIfPending(state: GameSnapshot): boolean {
+  if (getDying(state)) return true
+  const pd = getPendingDying(state)
+  if (!pd) return false
+  const t = state.players[pd.targetId]
+  if (!t?.alive || t.hp > 0) {
+    clearPendingDying(state)
+    return false
+  }
+  clearPendingDying(state)
+  beginDying(state, pd.targetId, pd.killerId)
+  return true
+}
+
+function beginDying(
+  state: GameSnapshot,
+  targetId: number,
+  killerId: number | null,
+): void {
   const t = state.players[targetId]
-  // Self tao first (auto for dying)
-  while (t.hp <= 0) {
-    const tao = responseCards(t, 'tao')
-    if (!tao.length) break
-    const c = takeHand(state, targetId, tao[0].uid)!
-    discardCard(state, c)
-    t.hp += 1
-    log(state, `${t.name} 使用【桃】求救，體力回覆至 ${t.hp}。`)
+  const start = state.currentPlayer
+  log(state, `${t.name} 進入瀕死狀態（體力 ${t.hp}）！請出【桃】急救。`)
+  ;(state as GameSnapshot & { _dying?: DyingState })._dying = {
+    targetId,
+    killerId,
+    cursor: start,
+    startSeat: start,
+    checked: 0,
+    savedThisRound: false,
+  }
+  continueDyingAsk(state)
+}
+
+function continueDyingAsk(state: GameSnapshot): void {
+  const d = getDying(state)
+  if (!d) return
+  const t = state.players[d.targetId]
+  if (!t || !t.alive) {
+    clearDying(state)
+    resumeAfterDamageFlow(state)
+    return
+  }
+  if (t.hp > 0) {
+    log(state, `${t.name} 脫離瀕死（體力 ${t.hp}）。`)
+    clearDying(state)
+    resumeAfterDamageFlow(state)
+    return
+  }
+
+  const n = state.players.length
+  // Full round with no peach → death (after optional 不屈)
+  while (d.checked < n) {
+    const seat = d.cursor
+    d.cursor = (d.cursor + 1) % n
+    d.checked++
+    const p = state.players[seat]
+    if (!p.alive) continue
+    const cards = saveCardsFor(p)
+    if (!cards.length) continue
+
+    const need = 1 - t.hp
+    const victimGen = t.generalId ? getGeneral(t.generalId).name : t.name
+    state.prompt = {
+      kind: 'choice',
+      message: `【瀕死】${t.name}（${victimGen}）體力 ${t.hp}，尚需 ${need} 張【桃】。${p.name} 是否急救？`,
+      actorId: seat,
+      choiceKey: 'dying_save',
+      cardUids: cards.map((c) => c.uid),
+      targetIds: [d.targetId],
+      choices: [
+        ...cards.map((c) => {
+          const def = getCardDef(c.defId)
+          const asJijiu = cardKind(c) !== 'tao'
+          return {
+            id: c.uid,
+            label: asJijiu ? `急救：【${def.name}】當桃` : `使用【${def.name}】`,
+          }
+        }),
+        { id: 'skip', label: '不救' },
+      ],
+    }
+    return
+  }
+
+  if (d.savedThisRound) {
+    // Need more peaches — another ask round from current turn seat
+    d.cursor = d.startSeat
+    d.checked = 0
+    d.savedThisRound = false
+    continueDyingAsk(state)
+    return
+  }
+
+  // Nobody saved this round
+  tryBuquThenDeath(state, d.targetId, d.killerId)
+}
+
+function tryBuquThenDeath(
+  state: GameSnapshot,
+  targetId: number,
+  killerId: number | null,
+): void {
+  const t = state.players[targetId]
+  clearDying(state)
+  if (!t || !t.alive || t.hp > 0) {
+    resumeAfterDamageFlow(state)
+    return
   }
   // 不屈（簡化）：瀕死摸一張，若仍有手牌則回至1體力
-  if (t.hp <= 0 && t.generalId && getGeneral(t.generalId).skills.includes('buqu')) {
+  if (t.generalId && getGeneral(t.generalId).skills.includes('buqu')) {
     draw(state, targetId, 1)
     if (t.hand.length > 0) {
       t.hp = 1
       log(state, `${t.name} 發動不屈，體力回覆至1。`)
+      resumeAfterDamageFlow(state)
+      return
     }
   }
-  if (t.hp <= 0) {
-    t.hand.forEach((c) => discardCard(state, c))
-    t.hand = []
-    for (const slot of equipSlots()) {
-      const e = t.equips[slot]
-      if (e) leaveEquipArea(state, targetId, slot, e)
-    }
-    if (t.judges?.length) {
-      for (const j of t.judges) discardCard(state, j)
-      t.judges = []
-    }
-    if (t.hp > 0) {
-      log(state, `${t.name} 因失去裝備回覆體力，脫離瀕死（體力 ${t.hp}）。`)
-    } else {
-      t.alive = false
-      const seatLabel = (p: (typeof t)) => {
-        if (p.isHuman) return p.generalId ? getGeneral(p.generalId).name : p.name
-        const generic = !p.name || p.name === '友軍' || p.name === '敵軍' || p.name.startsWith('電腦')
-        if (!generic) return p.name
-        return p.generalId ? getGeneral(p.generalId).name : p.name
-      }
-      const victimName = seatLabel(t)
-      const killer =
-        killerId !== null && state.players[killerId] ? state.players[killerId] : null
-      const killerName = killer ? seatLabel(killer) : null
-      state.killLog.push({
-        victimId: targetId,
-        victimName,
-        killerId: killer?.id ?? null,
-        killerName,
-      })
-      observePublicEvent(state, { type: 'death', playerId: targetId })
-      if (killerName) {
-        log(state, `${victimName} 陣亡，為 ${killerName} 所殺。`)
-      } else {
-        log(state, `${victimName} 陣亡。`)
-      }
-      // 行殤：其他角色死亡時摸兩張
-      for (const p of state.players) {
-        if (!p.alive || p.id === targetId || !p.generalId) continue
-        if (getGeneral(p.generalId).skills.includes('xingshang')) {
-          draw(state, p.id, 2)
-          log(state, `${p.name} 發動行殤，摸兩張牌。`)
-        }
-      }
+  finalizeDeath(state, targetId, killerId)
+  resumeAfterDamageFlow(state)
+}
+
+function finalizeDeath(
+  state: GameSnapshot,
+  targetId: number,
+  killerId: number | null,
+): void {
+  const t = state.players[targetId]
+  if (!t || !t.alive) return
+  if (t.hp > 0) return
+
+  t.hand.forEach((c) => discardCard(state, c))
+  t.hand = []
+  for (const slot of equipSlots()) {
+    const e = t.equips[slot]
+    if (e) leaveEquipArea(state, targetId, slot, e)
+  }
+  if (t.judges?.length) {
+    for (const j of t.judges) discardCard(state, j)
+    t.judges = []
+  }
+  if (t.hp > 0) {
+    log(state, `${t.name} 因失去裝備回覆體力，脫離瀕死（體力 ${t.hp}）。`)
+    return
+  }
+  t.alive = false
+  const seatLabel = (p: PlayerState) => {
+    if (p.isHuman) return p.generalId ? getGeneral(p.generalId).name : p.name
+    const generic = !p.name || p.name === '友軍' || p.name === '敵軍' || p.name.startsWith('電腦')
+    if (!generic) return p.name
+    return p.generalId ? getGeneral(p.generalId).name : p.name
+  }
+  const victimName = seatLabel(t)
+  const killer =
+    killerId !== null && state.players[killerId] ? state.players[killerId] : null
+  const killerName = killer ? seatLabel(killer) : null
+  state.killLog.push({
+    victimId: targetId,
+    victimName,
+    killerId: killer?.id ?? null,
+    killerName,
+  })
+  observePublicEvent(state, { type: 'death', playerId: targetId })
+  if (killerName) {
+    log(state, `${victimName} 陣亡，為 ${killerName} 所殺。`)
+  } else {
+    log(state, `${victimName} 陣亡。`)
+  }
+  // 行殤：其他角色死亡時摸兩張
+  for (const p of state.players) {
+    if (!p.alive || p.id === targetId || !p.generalId) continue
+    if (getGeneral(p.generalId).skills.includes('xingshang')) {
+      draw(state, p.id, 2)
+      log(state, `${p.name} 發動行殤，摸兩張牌。`)
     }
   }
 }
@@ -3119,7 +3319,10 @@ export function activateSkill(state: GameSnapshot, playerId: number, skillId: st
     log(state, `${p.name} 發動【苦肉】，失去1點體力。`)
     draw(state, playerId, 2)
     log(state, `${p.name} 摸兩張牌。`)
-    if (p.hp <= 0) trySave(state, playerId, playerId)
+    if (p.hp <= 0) {
+      trySave(state, playerId, playerId)
+      if (getDying(state) || isAwaitingZonePick(state)) return
+    }
     checkVictory(state)
     if (!state.winnerIds && p.alive) setPlayPrompt(state)
     return

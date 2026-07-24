@@ -506,6 +506,27 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
   }
   if (key === 'ganglie') return ids.includes('discard') ? 'discard' : 'damage'
   if (key === 'jianxiong') return ids.includes('take') ? 'take' : 'skip'
+  if (key === 'dying_save') {
+    const targetId = state.prompt.targetIds?.[0]
+    if (targetId === undefined) return 'skip'
+    // Save self always; save allies / lord; never save enemies
+    if (targetId === playerId) {
+      return ids.find((id) => id !== 'skip') ?? 'skip'
+    }
+    if (!believedHostile(state, playerId, targetId)) {
+      return ids.find((id) => id !== 'skip') ?? 'skip'
+    }
+    // Identity: loyal saves lord
+    const me = state.players[playerId]
+    const victim = state.players[targetId]
+    if (me.identity === 'loyal' && victim.identity === 'lord') {
+      return ids.find((id) => id !== 'skip') ?? 'skip'
+    }
+    if (me.identity === 'lord' && victim.identity === 'loyal') {
+      return ids.find((id) => id !== 'skip') ?? 'skip'
+    }
+    return 'skip'
+  }
   if (key === 'yaowu') {
     const p = state.players[playerId]
     if (p.hp < p.maxHp && ids.includes('recover')) return 'recover'
