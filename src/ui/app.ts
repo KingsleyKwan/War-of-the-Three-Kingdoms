@@ -17,6 +17,7 @@ import { renderCampaignMap } from '../data/campaigns/map'
 import { getGeneral } from '../data/generals'
 import { CARD_HELP, rankLabel, suitName, suitSymbol } from '../data/help'
 import { formatPackList, PACK_DEFS } from '../data/packs'
+import { colorizeSeatNamesInText, seatColor, seatRefHtml } from '../data/seatColors'
 import { portraitDataUri } from '../data/portraits'
 import {
   activateSkill,
@@ -567,10 +568,16 @@ function renderTable(): string {
     app.aiBusy &&
     prompt.actorId !== null &&
     !g.players[prompt.actorId]?.isHuman
-      ? `<div class="thinking">${escapeHtml(g.players[prompt.actorId].name)} 思考中…</div>`
+      ? `<div class="thinking">${seatRefHtml(g.players[prompt.actorId].name, prompt.actorId)} 思考中…</div>`
       : app.matchPaused
         ? `<div class="thinking paused-banner">對局已暫停</div>`
         : ''
+
+  const namedSeats = g.players.map((p) => ({
+    id: p.id,
+    name: p.name,
+    generalName: p.generalId ? getGeneral(p.generalId).name : undefined,
+  }))
 
   return `
   <div class="screen table-screen ${matchEnded ? 'match-ended' : ''} ${app.matchPaused ? 'match-paused' : ''}">
@@ -612,6 +619,7 @@ function renderTable(): string {
               : ''
           const idText = identityLabelVisible(p, human, g.config.mode)
           const hurt = g.fx.damages.find((d) => d.playerId === p.id)
+          const c = seatColor(p.id)
           const portrait =
             app.settings.showPortraits && gen
               ? `<img class="portrait" src="${portraitDataUri(gen.name, gen.kingdom, gen.gender)}" alt="" width="48" height="48" />`
@@ -621,11 +629,11 @@ function renderTable(): string {
           const infoBtn = hasGen
             ? `<button type="button" class="info-btn" data-info-seat="${p.id}" title="詳情" aria-label="詳情">ℹ</button>`
             : ''
-          return `<div class="seat-wrap" style="--angle:${angle}deg" data-visual="${visual}" data-seat-pos="${p.id}">
+          return `<div class="seat-wrap" style="--angle:${angle}deg;--seat-c:${c}" data-visual="${visual}" data-seat-pos="${p.id}">
             <div class="seat ${p.alive ? '' : 'dead'} ${active ? 'active' : ''} ${p.isHuman ? 'human' : ''} ${targetable ? 'targetable' : ''} ${reach} ${picking && !hasGen ? 'hidden-gen' : ''} ${hurt ? 'hurt' : ''}" data-seat="${p.id}" role="${targetable ? 'button' : 'group'}" tabindex="${targetable ? '0' : '-1'}">
               ${portrait}
               <div class="seat-head">
-                <span class="seat-gen">${gen ? gen.name : '未亮將'}</span>
+                <span class="seat-gen">${gen ? escapeHtml(gen.name) : '未亮將'}</span>
                 ${infoBtn}
               </div>
               <div class="seat-name">${escapeHtml(p.name)}${idText ? `・${idText}` : ''}</div>
@@ -643,10 +651,11 @@ function renderTable(): string {
         .join('')}
       ${renderArenaFx(g, human.id, n)}
     </div>
-    <div class="prompt-bar">${escapeHtml(
+    <div class="prompt-bar">${colorizeSeatNamesInText(
       app.selectedUid && prompt.kind === 'choose_card'
         ? '已選取手牌 — 再點一次同一張牌以打出，或點其他牌改選'
         : prompt.message || '等待中…',
+      namedSeats,
     )}</div>
     ${picking ? renderGeneralPickPanel(g) : ''}
     ${!picking && (prompt.kind === 'choice' || prompt.kind === 'skill_cards') ? renderChoicePanel(g) : ''}
@@ -662,7 +671,7 @@ function renderTable(): string {
     }
     <div class="log">${[...g.log]
       .slice(-6)
-      .map((l) => `<div>${escapeHtml(l.text)}</div>`)
+      .map((l) => `<div>${colorizeSeatNamesInText(l.text, namedSeats)}</div>`)
       .join('')}</div>
     ${
       picking
@@ -954,7 +963,7 @@ function cardSubLabel(def: ReturnType<typeof getCardDef>): string {
 
 function seatDetailHtml(p: PlayerState): string {
   if (!p.generalId) {
-    return `<h3>${escapeHtml(p.name)}</h3><p class="muted">尚未亮出武將。</p>`
+    return `<h3>${seatRefHtml(p.name, p.id)}</h3><p class="muted">尚未亮出武將。</p>`
   }
   const gen = getGeneral(p.generalId)
   const equips = (['weapon', 'armor', 'horseMinus', 'horsePlus'] as const)
@@ -991,8 +1000,8 @@ function seatDetailHtml(p: PlayerState): string {
       return label ? `<p class="muted">公開身份資訊：${label}</p>` : ''
     })()
 
-  return `<h3>${gen.name}</h3>
-    <p class="muted">${kingdomName(gen.kingdom)}・${gen.maxHp} 血・${gen.gender === 'female' ? '女' : '男'}・${escapeHtml(p.name)}</p>
+  return `<h3>${seatRefHtml(gen.name, p.id)} <span class="muted">·</span> ${seatRefHtml(p.name, p.id)}</h3>
+    <p class="muted">${kingdomName(gen.kingdom)}・${gen.maxHp} 血・${gen.gender === 'female' ? '女' : '男'}</p>
     ${idVisible ?? ''}
     <h4>武將技</h4>
     <p>${escapeHtml(gen.skillText)}</p>

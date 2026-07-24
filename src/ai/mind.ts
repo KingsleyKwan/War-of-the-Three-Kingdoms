@@ -1,4 +1,10 @@
 import { getGeneral } from '../data/generals'
+import {
+  colorizeSeatNamesInText,
+  seatColor,
+  seatRefHtml,
+  type NamedSeat,
+} from '../data/seatColors'
 import type { GameSnapshot, Identity } from '../engine/types'
 import { cardKind } from '../engine/helpers'
 
@@ -522,6 +528,14 @@ export function formatSeatMindHtml(state: GameSnapshot, seatId: number): string 
   const seat = state.players[seatId]
   if (!mind || !seat) return ''
 
+  const namedSeats: NamedSeat[] = state.players.map((p) => ({
+    id: p.id,
+    name: p.name,
+    generalName: p.generalId ? getGeneral(p.generalId).name : undefined,
+  }))
+
+  const tint = (raw: string) => colorizeSeatNamesInText(raw, namedSeats)
+
   const pool = remainingIdentityPool(state)
   const poolHtml = pool.length
     ? `<p class="mind-pool">剩餘身份池：${escapeHtml(
@@ -548,7 +562,7 @@ export function formatSeatMindHtml(state: GameSnapshot, seatId: number): string 
           ? `<ul class="mind-evidence">${b.evidence
               .slice()
               .reverse()
-              .map((e) => `<li>${escapeHtml(e)}</li>`)
+              .map((e) => `<li>${tint(e)}</li>`)
               .join('')}</ul>`
           : ''
       const conf =
@@ -556,23 +570,26 @@ export function formatSeatMindHtml(state: GameSnapshot, seatId: number): string 
           ? `<span class="mind-conf">${Math.round(b.confidence * 100)}%</span>`
           : ''
       const dead = !o.alive ? '（已陣亡・身份已亮）' : ''
-      return `<div class="mind-row">
-        <div class="mind-target"><strong>${escapeHtml(o.name)}</strong>${dead} ${conf}</div>
+      const gen = o.generalId ? getGeneral(o.generalId).name : ''
+      return `<div class="mind-row" style="--seat-c:${seatColor(o.id)}">
+        <div class="mind-target">${seatRefHtml(o.name, o.id)}${
+          gen ? ` <span class="mind-gen">${seatRefHtml(gen, o.id)}</span>` : ''
+        }${dead} ${conf}</div>
         <div class="mind-guess">推測：${escapeHtml(identityGuessLabel(guess))}</div>
         ${ex}
-        ${b.note && known === 'unknown' ? `<div class="mind-note">${escapeHtml(b.note)}</div>` : ''}
+        ${b.note && known === 'unknown' ? `<div class="mind-note">${tint(b.note)}</div>` : ''}
         ${ev}
       </div>`
     })
     .join('')
 
   const thought = mind.thought
-    ? `<p class="mind-thought">當下想法：${escapeHtml(mind.thought)}</p>`
+    ? `<p class="mind-thought">當下想法：${tint(mind.thought)}</p>`
     : ''
 
   return `<section class="mind-panel">
-    <h4>身份推測（${escapeHtml(seat.name)} 視角）</h4>
-    <p class="muted">依公開行為與死亡亮將推斷；內奸可能伪装。點 ℹ 僅查看，不影響規則。</p>
+    <h4>身份推測（${seatRefHtml(seat.name, seat.id)} 視角）</h4>
+    <p class="muted">依公開行為與死亡亮將推斷；內奸可能伪装。同色姓名＝同一座位。點 ℹ 僅查看，不影響規則。</p>
     ${poolHtml}
     ${rows}
     ${thought}

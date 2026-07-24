@@ -1170,12 +1170,19 @@ input {
 
 .seat-name {
   font-size: 0.72rem;
-  color: rgba(232, 220, 196, 0.6);
+  color: var(--seat-c, rgba(232, 220, 196, 0.6));
+  font-weight: 600;
 }
 
 .seat-gen {
   font-size: 0.95rem;
   letter-spacing: 0.04em;
+  font-weight: 700;
+  color: var(--seat-c, rgba(255, 244, 214, 0.95));
+}
+
+.seat-ref {
+  color: var(--seat-c, inherit);
   font-weight: 700;
 }
 
@@ -1401,6 +1408,11 @@ input {
   align-items: baseline;
   justify-content: space-between;
   gap: 0.5rem;
+}
+
+.mind-gen {
+  opacity: 0.92;
+  font-size: 0.92em;
 }
 
 .mind-conf {
