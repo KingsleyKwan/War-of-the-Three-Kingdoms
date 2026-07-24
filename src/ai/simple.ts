@@ -308,17 +308,35 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
     return ids[0] ?? null
   }
   if (key === 'wuxie') {
-    const w = (state as GameSnapshot & { _wuxie?: { trick: { type: string; targetId?: number; targets?: number[]; sourceId: number }; nullified: boolean } })._wuxie
+    const w = (state as GameSnapshot & {
+      _wuxie?: {
+        trick: {
+          type: string
+          targetId?: number
+          targets?: number[]
+          sourceId: number
+          pickerId?: number
+        }
+        nullified: boolean
+      }
+    })._wuxie
     if (!w || !ids.includes('use')) return ids.includes('skip') ? 'skip' : ids[0] ?? null
     const trick = w.trick
+
+    // 五穀豐登：無懈某一名角色的選牌
+    if (trick.type === 'wugu_pick' && trick.pickerId !== undefined) {
+      const denyEnemy = believedHostile(state, playerId, trick.pickerId)
+      if (denyEnemy && !w.nullified) return 'use'
+      if (!denyEnemy && w.nullified) return 'use' // restore ally pick
+      return 'skip'
+    }
+
     const hitsMe =
       (trick.type === 'aoe' && (trick.targets ?? []).includes(playerId)) ||
       (typeof trick.targetId === 'number' && trick.targetId === playerId)
     const fromEnemy = believedHostile(state, playerId, trick.sourceId)
-    // If effect is currently on and hits me from enemy → nullify; if already nullified and I want it back...
     if (hitsMe && fromEnemy && !w.nullified) return 'use'
     if (!hitsMe && fromEnemy && trick.type === 'aoe' && !w.nullified) {
-      // Optional: protect allies from AOE
       return 'skip'
     }
     return 'skip'

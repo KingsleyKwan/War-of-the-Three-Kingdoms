@@ -300,6 +300,7 @@ export function buildStageMatch(
     isHuman: true,
     generalId: stage.playerGeneralId,
     identity: 'none',
+    side: 'ally',
   })
 
   for (const a of stage.allies) {
@@ -308,6 +309,7 @@ export function buildStageMatch(
       isHuman: false,
       generalId: resolveGeneralId(a.generalId),
       identity: 'none',
+      side: 'ally',
     })
   }
 
@@ -317,6 +319,7 @@ export function buildStageMatch(
       isHuman: false,
       generalId: resolveGeneralId(chosenAllyId),
       identity: 'none',
+      side: 'ally',
     })
   }
 
@@ -326,6 +329,7 @@ export function buildStageMatch(
       isHuman: false,
       generalId: resolveGeneralId(e.generalId),
       identity: 'none',
+      side: 'enemy',
     })
   }
 

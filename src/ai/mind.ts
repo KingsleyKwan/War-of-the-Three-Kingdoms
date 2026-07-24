@@ -442,9 +442,13 @@ export function believedSameSide(a: IdentityGuess, b: IdentityGuess): boolean {
 
 export function believedHostile(state: GameSnapshot, viewerId: number, targetId: number): boolean {
   if (viewerId === targetId) return false
-  const minds = ensureAiMind(state)
   const me = state.players[viewerId]
-  if (state.config.mode === 'duel' || state.config.victory) return true
+  const them = state.players[targetId]
+  // Story teams override fog beliefs
+  if (me.side && them.side) return me.side !== them.side
+
+  const minds = ensureAiMind(state)
+  if (state.config.mode === 'duel') return true
 
   const myId = me.identity
   const known = knownIdentity(state, viewerId, targetId)
@@ -452,7 +456,6 @@ export function believedHostile(state: GameSnapshot, viewerId: number, targetId:
   const guess = known !== 'unknown' ? known : b?.guess ?? 'unknown'
 
   if (guess === 'unknown') {
-    // If strongly excluded as same-side, treat hostile
     if (myId === 'loyal' && b?.excluded.includes('loyal') === false && b?.excluded.includes('rebel')) {
       return false
     }

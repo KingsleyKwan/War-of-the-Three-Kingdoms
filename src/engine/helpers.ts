@@ -140,7 +140,14 @@ export function effectiveKind(player: PlayerState, card: CardInstance): string {
 }
 
 export function enemiesOf(state: GameSnapshot, playerId: number): number[] {
-  if (state.config.mode === 'duel' || state.config.victory) {
+  const me = state.players[playerId]
+  // Story teams: only the opposing side
+  if (me.side) {
+    return state.players
+      .filter((p) => p.alive && p.id !== playerId && p.side && p.side !== me.side)
+      .map((p) => p.id)
+  }
+  if (state.config.mode === 'duel') {
     return state.players
       .filter((p) => p.alive && p.id !== playerId)
       .map((p) => p.id)
@@ -169,7 +176,11 @@ export function checkVictory(state: GameSnapshot): void {
   if (rule?.type === 'eliminate_enemies' || rule?.type === 'eliminate_all_others') {
     const human = state.players.find((p) => p.isHuman)
     if (!human) return
-    const foes = state.players.filter((p) => p.alive && !p.isHuman)
+    const foes = state.players.filter((p) => {
+      if (!p.alive || p.id === human.id) return false
+      if (human.side) return p.side === 'enemy'
+      return !p.isHuman
+    })
     if (foes.length === 0) {
       state.winnerIds = [human.id]
       state.resultMessage = '勝利！敌军已全灭。'

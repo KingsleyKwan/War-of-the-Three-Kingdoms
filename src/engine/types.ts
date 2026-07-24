@@ -14,6 +14,7 @@ export type Kingdom = 'wei' | 'shu' | 'wu' | 'qun' | 'god'
 export type Phase = 'prepare' | 'judge' | 'draw' | 'play' | 'discard' | 'end'
 export type GameMode = 'duel' | 'identity5' | 'identity8'
 export type MatchPhase = 'pick_general' | 'playing'
+export type CampaignSide = 'ally' | 'enemy'
 
 export interface CardDef {
   id: string
@@ -55,6 +56,11 @@ export interface PlayerState {
   /** Empty until general is chosen / revealed */
   generalId: string
   identity: Identity
+  /**
+   * Story / campaign team. When set, only the other side is a legal attack target.
+   * Identity / free duel leave this undefined.
+   */
+  side?: CampaignSide
   hp: number
   maxHp: number
   hand: CardInstance[]
@@ -152,6 +158,8 @@ export interface MatchConfig {
     isHuman: boolean
     generalId: string
     identity: Identity
+    /** Story team marker */
+    side?: CampaignSide
   }>
   victory?: VictoryRule
   campaignStageId?: string

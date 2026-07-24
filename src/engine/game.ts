@@ -97,6 +97,7 @@ export function createMatch(config: MatchConfig): GameSnapshot {
         isHuman: p.isHuman,
         generalId: '',
         identity: p.identity,
+        side: p.side,
         hp: 0,
         maxHp: 0,
         hand: [],
@@ -113,6 +114,7 @@ export function createMatch(config: MatchConfig): GameSnapshot {
       isHuman: p.isHuman,
       generalId: p.generalId,
       identity: p.identity,
+      side: p.side,
       hp: g.maxHp,
       maxHp: g.maxHp,
       hand: [],
@@ -592,7 +594,8 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
     })
     log(state, `${p.name} 使用【五穀豐登】。`)
     afterTrick(state, p)
-    beginWuxieWindow(state, { type: 'wugu', sourceId: playerId })
+    // Per-player 無懈 happens before each pick; do not nullify the whole card here.
+    startWugu(state, playerId)
     return
   }
 
@@ -696,6 +699,7 @@ type PendingTrick =
   | { type: 'wuzhong'; sourceId: number }
   | { type: 'taoyuan'; sourceId: number; healed: number[] }
   | { type: 'wugu'; sourceId: number }
+  | { type: 'wugu_pick'; sourceId: number; pickerId: number }
   | {
       type: 'aoe'
       sourceId: number
@@ -747,6 +751,7 @@ function continueWuxieAsk(state: GameSnapshot): void {
   const w = getWuxie(state)
   if (!w) return
   const n = state.players.length
+  const pickerId = w.trick.type === 'wugu_pick' ? w.trick.pickerId : undefined
   while (w.asked < n) {
     const seat = w.cursor
     w.cursor = (w.cursor + 1) % n
@@ -755,9 +760,13 @@ function continueWuxieAsk(state: GameSnapshot): void {
     if (!p.alive) continue
     const wuxieCards = p.hand.filter((c) => cardKind(c) === 'wuxie')
     if (!wuxieCards.length) continue
+    const about =
+      pickerId !== undefined
+        ? `是否無懈【五穀豐登】中 ${state.players[pickerId]?.name ?? ''} 的選牌？`
+        : `是否無懈當前錦囊？`
     state.prompt = {
       kind: 'choice',
-      message: `【無懈可擊】${p.name}：是否無懈當前錦囊？`,
+      message: `【無懈可擊】${p.name}：${about}`,
       actorId: seat,
       choiceKey: 'wuxie',
       cardUids: wuxieCards.map((c) => c.uid),
@@ -773,6 +782,18 @@ function continueWuxieAsk(state: GameSnapshot): void {
   const nullified = w.nullified
   clearWuxie(state)
   if (nullified) {
+    if (trick.type === 'wugu_pick') {
+      const picker = state.players[trick.pickerId]
+      log(state, `【五穀豐登】${picker?.name ?? ''} 選牌被【無懈可擊】抵消，跳過。`)
+      const wg = getWugu(state)
+      if (wg) {
+        wg.index++
+        continueWugu(state)
+      } else {
+        setPlayPrompt(state)
+      }
+      return
+    }
     log(state, `錦囊效果被【無懈可擊】抵消。`)
     if (trick.type === 'delayed') discardCard(state, trick.card)
     if (state.phase === 'play') setPlayPrompt(state)
@@ -811,6 +832,10 @@ function resolvePendingTrick(state: GameSnapshot, trick: PendingTrick): void {
   }
   if (trick.type === 'wugu') {
     startWugu(state, trick.sourceId)
+    return
+  }
+  if (trick.type === 'wugu_pick') {
+    askWuguPickUi(state, trick.pickerId)
     return
   }
   if (trick.type === 'aoe') {
@@ -876,6 +901,7 @@ type WuguState = {
   pool: CardInstance[]
   order: number[]
   index: number
+  sourceId: number
 }
 
 function getWugu(state: GameSnapshot): WuguState | undefined {
@@ -909,11 +935,17 @@ function startWugu(state: GameSnapshot, sourceId: number): void {
     return
   }
   log(state, `【五穀豐登】亮出 ${pool.length} 張牌。`)
-  ;(state as GameSnapshot & { _wugu?: WuguState })._wugu = { pool, order, index: 0 }
-  askWuguPick(state)
+  ;(state as GameSnapshot & { _wugu?: WuguState })._wugu = {
+    pool,
+    order,
+    index: 0,
+    sourceId,
+  }
+  continueWugu(state)
 }
 
-function askWuguPick(state: GameSnapshot): void {
+/** Before each pick: offer 無懈 against that player's obtain effect. */
+function continueWugu(state: GameSnapshot): void {
   const w = getWugu(state)
   if (!w) return
   if (w.index >= w.order.length || !w.pool.length) {
@@ -922,12 +954,27 @@ function askWuguPick(state: GameSnapshot): void {
     setPlayPrompt(state)
     return
   }
-  const seat = w.order[w.index]
-  const p = state.players[seat]
+  const pickerId = w.order[w.index]
+  beginWuxieWindow(state, {
+    type: 'wugu_pick',
+    sourceId: w.sourceId,
+    pickerId,
+  })
+}
+
+function askWuguPickUi(state: GameSnapshot, pickerId: number): void {
+  const w = getWugu(state)
+  if (!w) return
+  const p = state.players[pickerId]
+  if (!p?.alive || !w.pool.length) {
+    w.index++
+    continueWugu(state)
+    return
+  }
   state.prompt = {
     kind: 'choice',
     message: `【五穀豐登】${p.name} 選擇一張牌`,
-    actorId: seat,
+    actorId: pickerId,
     choiceKey: 'wugu',
     choices: w.pool.map((c) => {
       const d = getCardDef(c.defId)
@@ -2190,7 +2237,7 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
       `${state.players[playerId].name} 獲得【${getCardDef(got.defId).name}】。`,
     )
     w.index++
-    askWuguPick(state)
+    continueWugu(state)
     return
   }
 
