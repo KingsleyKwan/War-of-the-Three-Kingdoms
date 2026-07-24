@@ -15,16 +15,16 @@ import {
   canReach,
   cardKind,
   checkVictory,
-  distanceMod,
   enemiesOf,
   equipSlots,
   findCard,
+  getDistance,
   handLimit,
   isBlackCard,
   isRedCard,
   removeHand as removeHandCard,
-  seatDistance,
   shuffle,
+  withinDistanceOne,
 } from './helpers'
 import {
   armorKind,
@@ -936,6 +936,14 @@ function askWuguPick(state: GameSnapshot): void {
   }
 }
 
+/**
+ * Legal targets by card kind. Distance rules (classic):
+ * - 殺: attack range (weapon)
+ * - 過河拆橋 / 決鬥 / 火攻 / 樂不思蜀: no distance limit
+ * - 順手牽羊 / 兵糧寸斷: distance ≤ 1
+ * - 奇才: your tricks ignore distance
+ * - 借刀: first pick = weapon holder (no dist); kill target = holder's attack range
+ */
 function legalTargets(state: GameSnapshot, playerId: number, kind: string): number[] {
   const source = state.players[playerId]
   const sourceSkills = source.generalId ? getGeneral(source.generalId).skills : []
@@ -944,39 +952,45 @@ function legalTargets(state: GameSnapshot, playerId: number, kind: string): numb
   if (kind === 'sha') {
     return enemiesOf(state, playerId).filter((t) => {
       const target = state.players[t]
-      // 空城
       if (getGeneral(target.generalId).skills.includes('kongcheng') && target.hand.length === 0) {
         return false
       }
       return canReach(state, playerId, t)
     })
   }
-  if (kind === 'guohe' || kind === 'shunshou' || kind === 'juedou' || kind === 'huogong') {
+
+  // No distance: 過河拆橋、決鬥、火攻
+  if (kind === 'guohe' || kind === 'juedou' || kind === 'huogong') {
     return state.players
       .filter((t) => {
         if (!t.alive || t.id === playerId) return false
-        // 謙遜：不能成為順手牽羊的目標
-        if (
-          kind === 'shunshou' &&
-          t.generalId &&
-          getGeneral(t.generalId).skills.includes('qianxun')
-        ) {
-          return false
-        }
-        if (kind === 'guohe' || kind === 'shunshou') {
+        if (kind === 'guohe') {
           const hasJudge = (t.judges?.length ?? 0) > 0
           if (t.hand.length === 0 && equipSlots().every((s) => !t.equips[s]) && !hasJudge) {
             return false
           }
         }
-        // 錦囊距離：奇才無視；否則需在攻擊範圍內（決鬥／火攻／過河／順手）
-        if (!ignoreTrickDist && !canReach(state, playerId, t.id)) {
-          return false
-        }
         return true
       })
       .map((t) => t.id)
   }
+
+  // Distance 1: 順手牽羊
+  if (kind === 'shunshou') {
+    return state.players
+      .filter((t) => {
+        if (!t.alive || t.id === playerId) return false
+        if (t.generalId && getGeneral(t.generalId).skills.includes('qianxun')) return false
+        const hasJudge = (t.judges?.length ?? 0) > 0
+        if (t.hand.length === 0 && equipSlots().every((s) => !t.equips[s]) && !hasJudge) {
+          return false
+        }
+        return withinDistanceOne(state, playerId, t.id, ignoreTrickDist)
+      })
+      .map((t) => t.id)
+  }
+
+  // 樂不思蜀: no distance; 兵糧寸斷: distance 1
   if (kind === 'lebu' || kind === 'bingliang') {
     return state.players
       .filter((t) => {
@@ -988,14 +1002,17 @@ function legalTargets(state: GameSnapshot, playerId: number, kind: string): numb
         ) {
           return false
         }
-        // 同名延時錦囊通常不重複
         if ((t.judges ?? []).some((j) => getCardDef(j.defId).kind === kind)) return false
+        if (kind === 'bingliang' && !withinDistanceOne(state, playerId, t.id, ignoreTrickDist)) {
+          return false
+        }
         return true
       })
       .map((t) => t.id)
   }
+
   if (kind === 'jiedao') {
-    // First pick: someone with a weapon (not self)
+    // First pick: someone with a weapon (no distance)
     return state.players
       .filter((t) => t.alive && t.id !== playerId && !!t.equips.weapon)
       .map((t) => t.id)
@@ -2758,12 +2775,7 @@ function dealDamage(
   // 狂骨：來源對距離1目標造成傷害後回1體力
   if (source && sourceId !== null && amount > 0 && source.generalId) {
     if (getGeneral(source.generalId).skills.includes('kuanggu')) {
-      const alive = state.players.map((p) => p.alive)
-      const base = seatDistance(sourceId, targetId, state.players.length, alive)
-      const fm = distanceMod(source)
-      const tm = distanceMod(t)
-      const dist = Math.max(1, base - fm.minus + tm.plus)
-      if (dist <= 1 && source.hp < source.maxHp) {
+      if (getDistance(state, sourceId, targetId) <= 1 && source.hp < source.maxHp) {
         source.hp += 1
         log(state, `${source.name} 發動狂骨，回復1點體力。`)
       }

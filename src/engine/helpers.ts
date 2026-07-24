@@ -46,17 +46,35 @@ export function distanceMod(p: PlayerState): { minus: number; plus: number } {
   return { minus, plus }
 }
 
-export function canReach(state: GameSnapshot, fromId: number, toId: number): boolean {
+export function getDistance(state: GameSnapshot, fromId: number, toId: number): number {
   const alive = state.players.map((p) => p.alive)
   const n = state.players.length
   const from = state.players[fromId]
   const to = state.players[toId]
-  if (!from.alive || !to.alive) return false
+  if (!from.alive || !to.alive) return 99
+  if (fromId === toId) return 0
   const base = seatDistance(fromId, toId, n, alive)
   const fm = distanceMod(from)
   const tm = distanceMod(to)
-  const dist = Math.max(1, base - fm.minus + tm.plus)
-  return dist <= attackRangeOf(from)
+  return Math.max(1, base - fm.minus + tm.plus)
+}
+
+export function canReach(state: GameSnapshot, fromId: number, toId: number): boolean {
+  const from = state.players[fromId]
+  const to = state.players[toId]
+  if (!from.alive || !to.alive) return false
+  return getDistance(state, fromId, toId) <= attackRangeOf(from)
+}
+
+/** Distance ≤ 1 (順手牽羊、兵糧寸斷); 奇才 ignores for tricks. */
+export function withinDistanceOne(
+  state: GameSnapshot,
+  fromId: number,
+  toId: number,
+  ignoreDist: boolean,
+): boolean {
+  if (ignoreDist) return true
+  return getDistance(state, fromId, toId) <= 1
 }
 
 export function handLimit(p: PlayerState): number {
