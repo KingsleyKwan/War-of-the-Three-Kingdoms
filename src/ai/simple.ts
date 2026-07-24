@@ -222,12 +222,24 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
     return hit ?? 'skip'
   }
   if (key === 'guohe') {
-    // Prefer discarding equips (weapon first), else first hand card
     const equip = ids.find((id) => id.startsWith('equip:weapon'))
       ?? ids.find((id) => id.startsWith('equip:armor'))
       ?? ids.find((id) => id.startsWith('equip:'))
     return equip ?? ids.find((id) => id.startsWith('hand:')) ?? choices[0].id
   }
+  if (key === 'zone_pick') {
+    const selected = state.prompt.selectedCardUids ?? []
+    const need = state.prompt.minTargets ?? 1
+    if (selected.length >= need) return 'confirm'
+    const remaining = ids.filter(
+      (id) => id !== 'confirm' && !selected.includes(id),
+    )
+    const equip = remaining.find((id) => id.startsWith('equip:weapon'))
+      ?? remaining.find((id) => id.startsWith('equip:armor'))
+      ?? remaining.find((id) => id.startsWith('equip:'))
+    return equip ?? remaining.find((id) => id.startsWith('hand:')) ?? remaining[0] ?? 'confirm'
+  }
+  if (key === 'ganglie') return ids.includes('discard') ? 'discard' : 'damage'
   if (key === 'rende_target' || key === 'zhangba_target') {
     return ids[0] ?? null
   }

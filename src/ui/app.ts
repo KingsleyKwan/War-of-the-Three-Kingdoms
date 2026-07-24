@@ -539,6 +539,7 @@ function renderChoicePanel(g: GameSnapshot): string {
   const choices = g.prompt.choices ?? []
   if (!choices.length) return ''
   const skillPick = g.prompt.kind === 'skill_cards'
+  const zonePick = g.prompt.choiceKey === 'zone_pick'
   const selected = g.prompt.selectedCardUids?.length ?? 0
   const min = g.prompt.minTargets ?? 1
   return `<div class="choice-panel">
@@ -546,8 +547,17 @@ function renderChoicePanel(g: GameSnapshot): string {
     <div class="choice-row">
       ${choices
         .map((c) => {
-          const disabled = skillPick && c.id === 'confirm' && selected < min
-          return `<button type="button" class="btn ${c.id === 'skip' || c.id === 'no' ? 'ghost' : 'primary'}" data-choice="${c.id}" ${disabled ? 'disabled' : ''}>${escapeHtml(c.label)}</button>`
+          const disabled =
+            (skillPick || zonePick) && c.id === 'confirm' && selected < min
+          const picked = zonePick && !!g.prompt.selectedCardUids?.includes(c.id)
+          const cls = [
+            'btn',
+            c.id === 'skip' || c.id === 'no' ? 'ghost' : 'primary',
+            picked ? 'selected-pick' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')
+          return `<button type="button" class="${cls}" data-choice="${c.id}" ${disabled ? 'disabled' : ''}>${escapeHtml(c.label)}</button>`
         })
         .join('')}
     </div>

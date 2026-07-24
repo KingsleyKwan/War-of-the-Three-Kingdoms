@@ -657,7 +657,7 @@ function finishTargetedCard(
 
     const startShaVs = (tid: number, extras: number[]) => {
       const target = state.players[tid]
-      if (getGeneral(target.generalId).skills.includes('liuli') && target.hand.length > 0) {
+      if (getGeneral(target.generalId).skills.includes('liuli') && countDiscardable(target) > 0) {
         const redirect = legalTargets(state, playerId, 'sha').filter(
           (x) => x !== tid && x !== playerId && canReach(state, tid, x),
         )
@@ -768,8 +768,14 @@ function finishTargetedCard(
     })
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【順手牽羊】。`)
     afterTrick(state, p)
-    steal(state, playerId, targetId)
-    setPlayPrompt(state)
+    beginZonePick(state, {
+      actorId: playerId,
+      ownerId: targetId,
+      count: 1,
+      skillId: 'shunshou',
+      mode: 'steal',
+      message: `【順手牽羊】選擇獲得 ${state.players[targetId].name} 的一張牌`,
+    })
     return
   }
 
@@ -784,7 +790,7 @@ function finishTargetedCard(
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【火攻】。`)
     afterTrick(state, p)
     dealDamage(state, targetId, 1, playerId, 'fire')
-    setPlayPrompt(state)
+    if (!isAwaitingZonePick(state)) setPlayPrompt(state)
     return
   }
 
@@ -1050,7 +1056,7 @@ export function passResponse(state: GameSnapshot, playerId: number): void {
     const src = aoe?.sourceId ?? state.currentPlayer
     log(state, `${state.players[playerId].name} 放棄出閃，受到傷害。`)
     dealDamage(state, playerId, 1, src)
-    resumeAfterResponse(state)
+    if (!isAwaitingZonePick(state)) resumeAfterResponse(state)
     return
   }
   if (state.prompt.kind === 'respond_sha') {
@@ -1058,7 +1064,7 @@ export function passResponse(state: GameSnapshot, playerId: number): void {
     const src = aoe?.sourceId ?? state.currentPlayer
     log(state, `${state.players[playerId].name} 放棄出殺，受到傷害。`)
     dealDamage(state, playerId, 1, src)
-    resumeAfterResponse(state)
+    if (!isAwaitingZonePick(state)) resumeAfterResponse(state)
   }
 }
 
@@ -1111,6 +1117,7 @@ function applyShaDamage(
     resumeAfterResponse(state)
     return
   }
+  if (isAwaitingZonePick(state)) return
   const source = state.players[sourceId]
   const target = state.players[targetId]
   if (weaponKind(source) === 'qilingong' && target.alive) {
@@ -1164,7 +1171,7 @@ function continueShaQueue(
       }
       const p = state.players[sourceId]
       const target = state.players[next]
-      if (getGeneral(target.generalId).skills.includes('liuli') && target.hand.length > 0) {
+      if (getGeneral(target.generalId).skills.includes('liuli') && countDiscardable(target) > 0) {
         const redirect = legalTargets(state, sourceId, 'sha').filter(
           (x) => x !== next && x !== sourceId && canReach(state, next, x),
         )
@@ -1279,7 +1286,7 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
   const targetId = state.prompt.targetIds?.[0]
 
   if (key === 'guohe' && targetId !== undefined) {
-    applyDismantleChoice(state, playerId, targetId, choiceId)
+    applyZoneCardIds(state, playerId, targetId, [choiceId], 'discard')
     setPlayPrompt(state)
     return
   }
@@ -1328,18 +1335,19 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
       return
     }
     const newTarget = Number(choiceId)
-    const actor = state.players[playerId]
-    if (!actor.hand.length || Number.isNaN(newTarget)) {
+    if (Number.isNaN(newTarget) || !state.players[newTarget]?.alive) {
       askShan(state, state.pending.sourceId, state.pending.targetId, state.pending.cardUid)
       return
     }
-    // Discard one hand card then redirect
-    const c = actor.hand[Math.floor(Math.random() * actor.hand.length)]
-    takeHand(state, playerId, c.uid)
-    discardCard(state, c)
-    log(state, `${actor.name} 發動【流離】，將殺轉移給 ${state.players[newTarget].name}。`)
-    state.pending.targetId = newTarget
-    askShan(state, state.pending.sourceId, newTarget, state.pending.cardUid)
+    ;(state as GameSnapshot & { _liuliTo?: number })._liuliTo = newTarget
+    beginZonePick(state, {
+      actorId: playerId,
+      ownerId: playerId,
+      count: 1,
+      skillId: 'liuli',
+      mode: 'discard',
+      message: '【流離】選擇一張牌棄置以轉移殺',
+    })
     return
   }
 
@@ -1361,7 +1369,9 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
             state.discard.pop()
             log(state, `${state.players[playerId].name} 發動天妒，獲得判定牌。`)
           }
-          if (black) dealDamage(state, tid, 2, playerId, 'thunder')
+          if (black) {
+            if (dealDamage(state, tid, 2, playerId, 'thunder')) return
+          }
         }
       }
     }
@@ -1399,19 +1409,22 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
       if (target.hand.length === 0) {
         draw(state, sourceId, 1)
         log(state, `${target.name} 無手牌可棄，${state.players[sourceId].name} 摸一張牌。`)
-      } else {
-        const c = target.hand.splice(Math.floor(Math.random() * target.hand.length), 1)[0]
-        discardCard(state, c)
-        log(state, `${target.name} 棄置一張手牌。`)
-        if (getGeneral(target.generalId).skills.includes('lianying') && target.hand.length === 0) {
-          draw(state, tid, 1)
-          log(state, `${target.name} 發動連營，摸一張牌。`)
-        }
+        askShan(state, sourceId, tid, state.pending.cardUid)
+        return
       }
-    } else {
-      draw(state, sourceId, 1)
-      log(state, `${state.players[sourceId].name} 因【雌雄雙股劍】摸一張牌。`)
+      beginZonePick(state, {
+        actorId: tid,
+        ownerId: tid,
+        count: 1,
+        skillId: 'cixiong',
+        mode: 'discard',
+        handOnly: true,
+        message: `【雌雄雙股劍】選擇一張手牌棄置`,
+      })
+      return
     }
+    draw(state, sourceId, 1)
+    log(state, `${state.players[sourceId].name} 因【雌雄雙股劍】摸一張牌。`)
     askShan(state, sourceId, tid, state.pending.cardUid)
     return
   }
@@ -1421,15 +1434,22 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
     const tid = state.pending.targetId
     const damage = (state as GameSnapshot & { _shaDamage?: number })._shaDamage ?? 1
     if (choiceId === 'yes') {
-      discardFromTarget(state, tid, 2)
-      log(state, `${state.players[sourceId].name} 發動【寒冰劍】，改為棄置對方的牌。`)
-      const extras = state.pending.extraTargets ?? []
-      const cardUid = state.pending.cardUid
-      const damageCard = state.pending.damageCard
-      continueShaQueue(state, sourceId, cardUid, extras, damageCard)
-    } else {
-      applyShaDamage(state, sourceId, tid, damage)
+      const n = Math.min(2, countDiscardable(state.players[tid]))
+      if (n <= 0) {
+        applyShaDamage(state, sourceId, tid, damage)
+        return
+      }
+      beginZonePick(state, {
+        actorId: sourceId,
+        ownerId: tid,
+        count: n,
+        skillId: 'hanbing',
+        mode: 'discard',
+        message: `【寒冰劍】選擇棄置 ${state.players[tid].name} 的 ${n} 張牌`,
+      })
+      return
     }
+    applyShaDamage(state, sourceId, tid, damage)
     return
   }
 
@@ -1500,16 +1520,51 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
 
   if (key === 'guanshi' && state.pending?.type === 'sha' && targetId !== undefined) {
     if (choiceId === 'yes') {
-      const source = state.players[playerId]
-      discardFromSelf(state, playerId, 2)
-      log(state, `${source.name} 發動【貫石斧】，棄兩張牌令殺生效。`)
-      finishShaHit(state, 1)
+      beginZonePick(state, {
+        actorId: playerId,
+        ownerId: playerId,
+        count: 2,
+        skillId: 'guanshi',
+        mode: 'discard',
+        message: '【貫石斧】選擇兩張牌棄置，令此殺仍造成傷害',
+      })
       return
     }
     const extras = state.pending.extraTargets ?? []
     const cardUid = state.pending.cardUid
     const damageCard = state.pending.damageCard
     continueShaQueue(state, state.pending.sourceId, cardUid, extras, damageCard)
+    return
+  }
+
+  if (key === 'ganglie') {
+    const sourceId = state.prompt.targetIds?.[0]
+    if (sourceId === undefined) {
+      resumeAfterDamageFlow(state)
+      return
+    }
+    if (choiceId === 'damage') {
+      dealDamage(state, sourceId, 1, playerId)
+      if (!isAwaitingZonePick(state)) resumeAfterDamageFlow(state)
+      return
+    }
+    if (choiceId === 'discard') {
+      beginZonePick(state, {
+        actorId: sourceId,
+        ownerId: sourceId,
+        count: 2,
+        skillId: 'ganglie',
+        mode: 'discard',
+        message: '【剛烈】選擇兩張牌棄置',
+      })
+      return
+    }
+    resumeAfterDamageFlow(state)
+    return
+  }
+
+  if (key === 'zone_pick') {
+    handleZonePickClick(state, playerId, choiceId)
     return
   }
 
@@ -1530,53 +1585,6 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
     const tid = Number(choiceId)
     finishZhangba(state, playerId, uids, tid)
     return
-  }
-}
-
-function discardFromTarget(state: GameSnapshot, targetId: number, n: number): void {
-  const t = state.players[targetId]
-  for (let i = 0; i < n; i++) {
-    if (t.hand.length) {
-      const c = t.hand.splice(Math.floor(Math.random() * t.hand.length), 1)[0]
-      discardCard(state, c)
-      if (getGeneral(t.generalId).skills.includes('lianying') && t.hand.length === 0) {
-        draw(state, targetId, 1)
-        log(state, `${t.name} 發動連營，摸一張牌。`)
-      }
-      continue
-    }
-    let removed = false
-    for (const slot of equipSlots()) {
-      const e = t.equips[slot]
-      if (e) {
-        leaveEquipArea(state, targetId, slot, e)
-        removed = true
-        break
-      }
-    }
-    if (!removed) break
-  }
-}
-
-function discardFromSelf(state: GameSnapshot, playerId: number, n: number): void {
-  const p = state.players[playerId]
-  for (let i = 0; i < n; i++) {
-    if (p.hand.length) {
-      const c = takeHand(state, playerId, p.hand[p.hand.length - 1].uid)
-      if (c) discardCard(state, c)
-      continue
-    }
-    const order: EquipSlot[] = ['horseMinus', 'horsePlus', 'armor', 'weapon']
-    let removed = false
-    for (const slot of order) {
-      const e = p.equips[slot]
-      if (e) {
-        leaveEquipArea(state, playerId, slot, e)
-        removed = true
-        break
-      }
-    }
-    if (!removed) break
   }
 }
 
@@ -1638,7 +1646,7 @@ function askAOEResponse(
   if (cards.length === 0) {
     dealDamage(state, targetId, 1, sourceId)
     log(state, `${target.name} 無法響應【${name}】，受到 1 點傷害。`)
-    resumeAfterResponse(state)
+    if (!isAwaitingZonePick(state)) resumeAfterResponse(state)
     return
   }
   state.prompt = {
@@ -1655,62 +1663,345 @@ function resolveJuedou(state: GameSnapshot, a: number, b: number): void {
   const pb = state.players[b]
   const cards = responseCards(pb, 'sha')
   if (cards.length === 0) {
-    dealDamage(state, b, 1, a)
+    if (dealDamage(state, b, 1, a)) return
   } else {
-    // auto consume one sha for target, then ask source — simplify: both lose 1 sha if able else damage
     const c = takeHand(state, b, cards[0].uid)!
     discardCard(state, c)
     const pa = state.players[a]
     const cardsA = responseCards(pa, 'sha')
     if (cardsA.length === 0) {
-      dealDamage(state, a, 1, b)
+      if (dealDamage(state, a, 1, b)) return
     } else {
       const c2 = takeHand(state, a, cardsA[0].uid)!
       discardCard(state, c2)
-      dealDamage(state, b, 1, a)
+      if (dealDamage(state, b, 1, a)) return
     }
   }
   checkVictory(state)
-  if (!state.winnerIds) setPlayPrompt(state)
+  if (!state.winnerIds && !isAwaitingZonePick(state)) setPlayPrompt(state)
 }
 
-function askDismantle(state: GameSnapshot, sourceId: number, targetId: number): void {
-  const t = state.players[targetId]
+function listZoneOptions(
+  p: PlayerState,
+  handOnly = false,
+): { id: string; label: string }[] {
   const choices: { id: string; label: string }[] = []
-  for (const c of t.hand) {
+  for (const c of p.hand) {
     const cdef = getCardDef(c.defId)
     choices.push({
       id: `hand:${c.uid}`,
       label: `手牌・${cdef.name}${cdef.suit ? ` ${suitShort(cdef.suit)}${rankShort(cdef.rank)}` : ''}`,
     })
   }
-  for (const slot of equipSlots()) {
-    const e = t.equips[slot]
-    if (e) {
-      choices.push({
-        id: `equip:${slot}`,
-        label: `裝備・${getCardDef(e.defId).name}`,
-      })
+  if (!handOnly) {
+    for (const slot of equipSlots()) {
+      const e = p.equips[slot]
+      if (e) {
+        choices.push({
+          id: `equip:${slot}`,
+          label: `裝備・${getCardDef(e.defId).name}`,
+        })
+      }
     }
   }
-  if (!choices.length) {
-    log(state, `${t.name} 沒有可棄置的牌。`)
-    setPlayPrompt(state)
+  return choices
+}
+
+function beginZonePick(
+  state: GameSnapshot,
+  opts: {
+    actorId: number
+    ownerId: number
+    count: number
+    skillId: string
+    mode: 'discard' | 'steal'
+    message: string
+    handOnly?: boolean
+  },
+): void {
+  const owner = state.players[opts.ownerId]
+  const options = listZoneOptions(owner, opts.handOnly)
+  const count = Math.min(opts.count, options.length)
+  if (count <= 0) {
+    finishZonePickSkill(state, opts.skillId, [])
     return
   }
-  if (choices.length === 1) {
-    applyDismantleChoice(state, sourceId, targetId, choices[0].id)
-    setPlayPrompt(state)
+  if (options.length === count && count === 1) {
+    applyZoneCardIds(state, opts.actorId, opts.ownerId, [options[0].id], opts.mode)
+    finishZonePickSkill(state, opts.skillId, [options[0].id])
     return
   }
+  // Auto-select when exactly `count` cards and no choice needed? Still show for clarity when count>1
   state.prompt = {
     kind: 'choice',
-    message: `【過河拆橋】選擇棄置 ${t.name} 的一張牌`,
-    actorId: sourceId,
-    choiceKey: 'guohe',
-    targetIds: [targetId],
-    choices,
+    message: opts.message,
+    actorId: opts.actorId,
+    choiceKey: 'zone_pick',
+    skillId: opts.skillId,
+    pickOwnerId: opts.ownerId,
+    pickMode: opts.mode,
+    targetIds: [opts.ownerId],
+    minTargets: count,
+    maxTargets: count,
+    selectedCardUids: [],
+    choices: buildZonePickChoices(options, [], count),
   }
+}
+
+function buildZonePickChoices(
+  options: { id: string; label: string }[],
+  selected: string[],
+  need: number,
+): { id: string; label: string }[] {
+  const toggles = options.map((o) => ({
+    id: o.id,
+    label: `${selected.includes(o.id) ? '✓ ' : ''}${o.label}`,
+  }))
+  return [
+    ...toggles,
+    {
+      id: 'confirm',
+      label: selected.length >= need ? `確認（${selected.length}/${need}）` : `請再選（${selected.length}/${need}）`,
+    },
+  ]
+}
+
+function handleZonePickClick(state: GameSnapshot, playerId: number, choiceId: string): void {
+  if (state.prompt.kind !== 'choice' || state.prompt.choiceKey !== 'zone_pick') return
+  if (state.prompt.actorId !== playerId) return
+  const need = state.prompt.minTargets ?? 1
+  const ownerId = state.prompt.pickOwnerId ?? state.prompt.targetIds?.[0]
+  const mode = state.prompt.pickMode ?? 'discard'
+  const skillId = state.prompt.skillId ?? ''
+  if (ownerId === undefined) return
+
+  const owner = state.players[ownerId]
+  const handOnly = skillId === 'cixiong'
+  const options = listZoneOptions(owner, handOnly)
+  let selected = [...(state.prompt.selectedCardUids ?? [])]
+
+  if (choiceId === 'confirm') {
+    if (selected.length < need) return
+    const picked = selected.slice(0, need)
+    applyZoneCardIds(state, playerId, ownerId, picked, mode)
+    finishZonePickSkill(state, skillId, picked)
+    return
+  }
+
+  if (!options.some((o) => o.id === choiceId)) return
+  const idx = selected.indexOf(choiceId)
+  if (idx >= 0) selected.splice(idx, 1)
+  else if (selected.length < need) selected.push(choiceId)
+  else {
+    // replace last
+    selected[selected.length - 1] = choiceId
+  }
+
+  // Single-pick: selecting one card can auto-confirm
+  if (need === 1 && selected.length === 1) {
+    applyZoneCardIds(state, playerId, ownerId, selected, mode)
+    finishZonePickSkill(state, skillId, selected)
+    return
+  }
+
+  state.prompt = {
+    ...state.prompt,
+    selectedCardUids: selected,
+    message: `${(state.prompt.message ?? '').split('（')[0]}（已選 ${selected.length}/${need}）`,
+    choices: buildZonePickChoices(options, selected, need),
+  }
+}
+
+function applyZoneCardIds(
+  state: GameSnapshot,
+  actorId: number,
+  ownerId: number,
+  ids: string[],
+  mode: 'discard' | 'steal',
+): void {
+  const owner = state.players[ownerId]
+  const actor = state.players[actorId]
+  for (const id of ids) {
+    if (id.startsWith('hand:')) {
+      const uid = id.slice(5)
+      const idx = owner.hand.findIndex((c) => c.uid === uid)
+      if (idx < 0) continue
+      const c = owner.hand.splice(idx, 1)[0]
+      const name = getCardDef(c.defId).name
+      if (mode === 'steal') {
+        actor.hand.push(c)
+        log(state, `${actor.name} 獲得了 ${owner.name} 的【${name}】。`)
+      } else if (actorId === ownerId) {
+        discardCard(state, c)
+        log(state, `${owner.name} 棄置了【${name}】。`)
+      } else {
+        discardCard(state, c)
+        log(state, `${actor.name} 棄置了 ${owner.name} 的【${name}】。`)
+      }
+      if (getGeneral(owner.generalId).skills.includes('lianying') && owner.hand.length === 0) {
+        draw(state, ownerId, 1)
+        log(state, `${owner.name} 發動連營，摸一張牌。`)
+      }
+      continue
+    }
+    if (id.startsWith('equip:')) {
+      const slot = id.slice(6) as EquipSlot
+      const e = owner.equips[slot]
+      if (!e) continue
+      const name = getCardDef(e.defId).name
+      if (mode === 'steal') {
+        delete owner.equips[slot]
+        actor.hand.push(e)
+        if (getCardDef(e.defId).kind === 'baiyin' && owner.alive) {
+          owner.hp = Math.min(owner.maxHp, owner.hp + 1)
+          log(state, `${owner.name} 失去【白銀獅子】，回覆1點體力。`)
+        }
+        if (getGeneral(owner.generalId).skills.includes('xiaoji')) {
+          draw(state, ownerId, 2)
+          log(state, `${owner.name} 發動梟姬，摸兩張牌。`)
+        }
+        log(state, `${actor.name} 獲得了【${name}】。`)
+      } else {
+        leaveEquipArea(state, ownerId, slot, e)
+        if (actorId === ownerId) log(state, `${owner.name} 棄置了【${name}】。`)
+        else log(state, `${actor.name} 棄置了 ${owner.name} 的【${name}】。`)
+      }
+    }
+  }
+}
+
+function finishZonePickSkill(state: GameSnapshot, skillId: string, _ids: string[]): void {
+  if (skillId === 'guanshi') {
+    if (state.pending?.type === 'sha') {
+      const name = state.players[state.pending.sourceId].name
+      log(state, `${name} 發動【貫石斧】，棄牌令殺生效。`)
+    }
+    finishShaHit(state, 1)
+    return
+  }
+  if (skillId === 'hanbing' && state.pending?.type === 'sha') {
+    log(state, `${state.players[state.pending.sourceId].name} 發動【寒冰劍】，改為棄置對方的牌。`)
+    const extras = state.pending.extraTargets ?? []
+    const cardUid = state.pending.cardUid
+    const damageCard = state.pending.damageCard
+    const sourceId = state.pending.sourceId
+    continueShaQueue(state, sourceId, cardUid, extras, damageCard)
+    return
+  }
+  if (skillId === 'guohe' || skillId === 'shunshou') {
+    setPlayPrompt(state)
+    return
+  }
+  if (skillId === 'liuli' && state.pending?.type === 'sha') {
+    const to = (state as GameSnapshot & { _liuliTo?: number })._liuliTo
+    delete (state as GameSnapshot & { _liuliTo?: number })._liuliTo
+    if (to === undefined || !state.players[to]?.alive) {
+      askShan(state, state.pending.sourceId, state.pending.targetId, state.pending.cardUid)
+      return
+    }
+    const fromName = state.players[state.pending.targetId].name
+    log(state, `${fromName} 發動【流離】，將殺轉移給 ${state.players[to].name}。`)
+    state.pending.targetId = to
+    askShan(state, state.pending.sourceId, to, state.pending.cardUid)
+    return
+  }
+  if (skillId === 'cixiong' && state.pending?.type === 'sha') {
+    askShan(state, state.pending.sourceId, state.pending.targetId, state.pending.cardUid)
+    return
+  }
+  if (skillId === 'fankui' || skillId === 'ganglie') {
+    resumeAfterDamageFlow(state)
+    return
+  }
+  setPlayPrompt(state)
+}
+
+function isAwaitingZonePick(state: GameSnapshot): boolean {
+  return (
+    state.prompt.kind === 'choice' &&
+    (state.prompt.choiceKey === 'zone_pick' || state.prompt.choiceKey === 'ganglie')
+  )
+}
+
+function resumeAfterDamageFlow(state: GameSnapshot): void {
+  checkVictory(state)
+  if (state.winnerIds) return
+
+  const dodged = (state as GameSnapshot & { _shaDodged?: { sourceId: number; targetId: number } })
+    ._shaDodged
+  if (dodged) {
+    delete (state as GameSnapshot & { _shaDodged?: unknown })._shaDodged
+    const q = (state as GameSnapshot & {
+      _shaQueue?: { sourceId: number; cardUid: string; extras: number[]; damageCard?: CardInstance }
+    })._shaQueue
+    if (q) {
+      state.pending = {
+        type: 'sha',
+        sourceId: dodged.sourceId,
+        targetId: dodged.targetId,
+        cardUid: q.cardUid,
+        damageCard: q.damageCard,
+        extraTargets: q.extras,
+      }
+    }
+    onShaDodged(state, dodged.sourceId, dodged.targetId)
+    return
+  }
+
+  if (state.pending?.type === 'sha') {
+    const pending = state.pending
+    const source = state.players[pending.sourceId]
+    const target = state.players[pending.targetId]
+    if (weaponKind(source) === 'qilingong' && target.alive) {
+      const horses = targetHorses(target)
+      if (horses.length) {
+        ;(state as GameSnapshot & {
+          _shaQueue?: { sourceId: number; cardUid: string; extras: number[]; damageCard?: CardInstance }
+        })._shaQueue = {
+          sourceId: pending.sourceId,
+          cardUid: pending.cardUid,
+          extras: pending.extraTargets ?? [],
+          damageCard: pending.damageCard,
+        }
+        state.pending = undefined
+        state.prompt = {
+          kind: 'choice',
+          message: `是否發動【麒麟弓】棄置 ${target.name} 的坐騎？`,
+          actorId: pending.sourceId,
+          choiceKey: 'qilingong',
+          targetIds: [pending.targetId],
+          choices: [
+            ...horses.map((slot) => ({
+              id: slot,
+              label: `棄置【${horseLabel(slot, target)}】`,
+            })),
+            { id: 'skip', label: '不發動' },
+          ],
+        }
+        return
+      }
+    }
+    continueShaQueue(
+      state,
+      pending.sourceId,
+      pending.cardUid,
+      pending.extraTargets ?? [],
+      pending.damageCard,
+    )
+    return
+  }
+  resumeAfterResponse(state)
+}
+
+function askDismantle(state: GameSnapshot, sourceId: number, targetId: number): void {
+  beginZonePick(state, {
+    actorId: sourceId,
+    ownerId: targetId,
+    count: 1,
+    skillId: 'guohe',
+    mode: 'discard',
+    message: `【過河拆橋】選擇棄置 ${state.players[targetId].name} 的一張牌`,
+  })
 }
 
 function suitShort(suit: string): string {
@@ -1726,57 +2017,6 @@ function rankShort(rank: number | undefined): string {
   return String(rank)
 }
 
-function applyDismantleChoice(
-  state: GameSnapshot,
-  sourceId: number,
-  targetId: number,
-  choiceId: string,
-): void {
-  const t = state.players[targetId]
-  const source = state.players[sourceId]
-  if (choiceId.startsWith('hand:')) {
-    const uid = choiceId.slice(5)
-    const idx = t.hand.findIndex((c) => c.uid === uid)
-    if (idx < 0) return
-    const c = t.hand.splice(idx, 1)[0]
-    discardCard(state, c)
-    log(state, `${source.name} 棄置了 ${t.name} 的【${getCardDef(c.defId).name}】。`)
-    if (getGeneral(t.generalId).skills.includes('lianying') && t.hand.length === 0) {
-      draw(state, targetId, 1)
-      log(state, `${t.name} 發動連營，摸一張牌。`)
-    }
-    return
-  }
-  if (choiceId.startsWith('equip:')) {
-    const slot = choiceId.slice(6) as EquipSlot
-    const e = t.equips[slot]
-    if (!e) return
-    const name = getCardDef(e.defId).name
-    leaveEquipArea(state, targetId, slot, e)
-    log(state, `${source.name} 棄置了 ${t.name} 的【${name}】。`)
-  }
-}
-
-function steal(state: GameSnapshot, fromId: number, targetId: number): void {
-  const t = state.players[targetId]
-  const thief = state.players[fromId]
-  if (t.hand.length) {
-    const c = t.hand.splice(Math.floor(Math.random() * t.hand.length), 1)[0]
-    thief.hand.push(c)
-    log(state, `${thief.name} 獲得了 ${t.name} 的一張手牌。`)
-    return
-  }
-  for (const slot of equipSlots()) {
-    const e = t.equips[slot]
-    if (e) {
-      delete t.equips[slot]
-      thief.hand.push(e)
-      log(state, `${thief.name} 獲得了【${getCardDef(e.defId).name}】。`)
-      return
-    }
-  }
-}
-
 function dealDamage(
   state: GameSnapshot,
   targetId: number,
@@ -1784,9 +2024,9 @@ function dealDamage(
   sourceId: number | null,
   nature: 'normal' | 'fire' | 'thunder' = 'normal',
   damageCard?: CardInstance,
-): void {
+): boolean {
   const t = state.players[targetId]
-  if (!t.alive) return
+  if (!t.alive) return false
   const source = sourceId !== null ? state.players[sourceId] : null
   const ignoreArm = source ? ignoresArmor(source) : false
 
@@ -1805,6 +2045,10 @@ function dealDamage(
   pushDamageFx(state, targetId, amount)
   const natureLabel = nature === 'fire' ? '火焰' : nature === 'thunder' ? '雷電' : ''
   log(state, `${t.name} 受到 ${amount} 點${natureLabel}傷害（體力 ${Math.max(t.hp, 0)}）。`)
+
+  if (t.hp <= 0) {
+    trySave(state, targetId)
+  }
 
   if (sourceId !== null && t.alive) {
     const skills = getGeneral(t.generalId).skills
@@ -1825,35 +2069,17 @@ function dealDamage(
         log(state, `${t.name} 發動奸雄，摸一張牌。`)
       }
     }
-    // 反饋：獲得傷害來源一張牌
-    if (skills.includes('fankui') && source) {
-      if (source.hand.length) {
-        const c = source.hand.splice(Math.floor(Math.random() * source.hand.length), 1)[0]
-        t.hand.push(c)
-        log(state, `${t.name} 發動反饋，獲得 ${source.name} 一張手牌。`)
-        if (getGeneral(source.generalId).skills.includes('lianying') && source.hand.length === 0) {
-          draw(state, sourceId, 1)
-          log(state, `${source.name} 發動連營，摸一張牌。`)
-        }
-      } else {
-        for (const slot of equipSlots()) {
-          const e = source.equips[slot]
-          if (e) {
-            delete source.equips[slot]
-            t.hand.push(e)
-            log(state, `${t.name} 發動反饋，獲得【${getCardDef(e.defId).name}】。`)
-            if (getCardDef(e.defId).kind === 'baiyin' && source.alive) {
-              source.hp = Math.min(source.maxHp, source.hp + 1)
-              log(state, `${source.name} 失去【白銀獅子】，回覆1點體力。`)
-            }
-            if (getGeneral(source.generalId).skills.includes('xiaoji')) {
-              draw(state, sourceId, 2)
-              log(state, `${source.name} 發動梟姬，摸兩張牌。`)
-            }
-            break
-          }
-        }
-      }
+    // 反饋：選擇獲得傷害來源一張牌
+    if (skills.includes('fankui') && source && countDiscardable(source) > 0) {
+      beginZonePick(state, {
+        actorId: targetId,
+        ownerId: sourceId,
+        count: 1,
+        skillId: 'fankui',
+        mode: 'steal',
+        message: `【反饋】選擇獲得 ${source.name} 的一張牌`,
+      })
+      return true
     }
     // 剛烈：判定，非紅桃則來源棄兩張或受1傷
     if (skills.includes('ganglie') && source) {
@@ -1870,22 +2096,29 @@ function dealDamage(
         }
         if (!heart) {
           if (countDiscardable(source) >= 2) {
-            discardFromSelf(state, sourceId, 2)
-            log(state, `${source.name} 因剛烈棄置兩張牌。`)
-          } else {
-            dealDamage(state, sourceId, 1, targetId)
-            log(state, `${t.name} 剛烈對 ${source.name} 造成傷害！`)
-            return
+            state.prompt = {
+              kind: 'choice',
+              message: `【剛烈】${source.name} 請選擇：棄兩張牌或受到1點傷害`,
+              actorId: sourceId,
+              choiceKey: 'ganglie',
+              targetIds: [sourceId],
+              choices: [
+                { id: 'discard', label: '棄兩張牌' },
+                { id: 'damage', label: '受到1點傷害' },
+              ],
+            }
+            return true
           }
+          const nested = dealDamage(state, sourceId, 1, targetId)
+          log(state, `${t.name} 剛烈對 ${source.name} 造成傷害！`)
+          return nested
         }
       }
     }
   }
 
-  if (t.hp <= 0) {
-    trySave(state, targetId)
-  }
   checkVictory(state)
+  return false
 }
 
 function trySave(state: GameSnapshot, targetId: number): void {

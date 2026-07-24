@@ -17,7 +17,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['fankui', 'guicai'],
-    skillText: '反饋：受到傷害後，可獲得傷害來源的一張牌。鬼才（未完整）。',
+    skillText: '反饋：受到傷害後，可選擇獲得傷害來源的一張牌。鬼才（未完整）。',
   },
   {
     id: 'xiahoudun',
@@ -26,7 +26,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['ganglie'],
-    skillText: '剛烈：受到傷害後判定，非紅桃則來源棄兩張牌或受到1點傷害。',
+    skillText: '剛烈：受到傷害後判定，非紅桃則來源須棄兩張牌（自選）或受到1點傷害。',
   },
   {
     id: 'zhangliao',

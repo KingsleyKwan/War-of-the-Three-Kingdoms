@@ -102,6 +102,10 @@ export interface PromptState {
   /** Skill multi-card pick (丈八 / 制衡 / 仁德) */
   skillId?: string
   selectedCardUids?: string[]
+  /** Zone pick: whose hand/equip is being chosen from */
+  pickOwnerId?: number
+  /** Zone pick: discard | steal */
+  pickMode?: 'discard' | 'steal'
 }
 
 export interface LogEntry {
