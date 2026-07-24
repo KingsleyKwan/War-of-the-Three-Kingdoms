@@ -499,6 +499,7 @@ function renderTable(): string {
     </div>`
     }
     <div class="actions">
+      <div class="actions-main">
       ${
         !picking && isHumanTurn && prompt.kind === 'choose_card' && app.selectedUid
           ? `<button type="button" class="btn ghost" id="cancel-select">取消選牌</button>`
@@ -526,7 +527,10 @@ function renderTable(): string {
           ? `<button type="button" class="btn" id="cancel-tgt">取消</button>`
           : ''
       }
-      <button type="button" class="btn ghost" id="flee">退出</button>
+      </div>
+      <div class="actions-quit">
+        <button type="button" class="btn ghost danger" id="flee">退出對局</button>
+      </div>
     </div>
   </div>`
 }
@@ -909,6 +913,7 @@ function bindTable(): void {
   })
 
   root().querySelector('#flee')?.addEventListener('click', () => {
+    if (!window.confirm('確定要退出對局嗎？進度不會保存。')) return
     app.game = null
     app.aiBusy = false
     app.screen = app.stage ? 'story' : 'start'
