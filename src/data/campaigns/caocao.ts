@@ -35,6 +35,8 @@ export interface CampaignStage {
   packs: PackId[]
   /** Guarantee these card kinds / names appear in the deck */
   requiredCardKinds?: string[]
+  /** Drop these kinds / names (e.g. trim delayed tricks on themed battles) */
+  excludeCardKinds?: string[]
   /** Player is always 曹操 unless overridden */
   playerGeneralId: string
   allies: Array<{ generalId: string; name?: string }>
@@ -143,7 +145,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     epilogueLose:
       '濮陽失守，煙塵吞沒城門。曹操敗走，典韋許褚死戰殿後的喊聲猶在耳中。\n兖州若盡失，曹操傳之路，將更坎坷。',
     bridgeNext: '兖州稍定，曹操南征張繡。宛城風光雖好，卻暗藏殺機——賈詡之計，尚在城中。',
-    packs: ['standard'],
+    packs: ['standard', 'ex'],
     playerGeneralId: 'caocao',
     allies: [{ generalId: 'xuchu' }],
     allyChoices: ['zhangliao', 'guojia', 'xiahoudun'],
@@ -181,7 +183,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     epilogueLose:
       '夜襲得手，曹營大亂。曹操倉皇突圍，身後是燃燒的旗幟與未竟的南征。\n若宛城之恥不雪，許昌亦難安枕。',
     bridgeNext: '北方袁紹勢力日盛，官渡一線遲早一戰。曹操收攏兵馬，目光轉向河北。',
-    packs: ['standard'],
+    packs: ['standard', 'ex'],
     playerGeneralId: 'caocao',
     allies: [{ generalId: 'dianwei_proxy', name: '典韋' }],
     allyChoices: ['xuchu', 'xiahoudun', 'guojia'],
@@ -261,7 +263,8 @@ export const CAOCAO_STAGES: CampaignStage[] = [
       '東風起，連營火。樓船傾覆，北軍大潰。曹操敗走華容道方向，衣甲盡濕。\n赤壁一敗，南北對峙之局就此定下。',
     bridgeNext: '曹操傳暫告一段落。亂世未盡，更多關卡將隨後續擴充而至。',
     packs: ['standard', 'ex'],
-    requiredCardKinds: ['火殺', 'tiesuo'],
+    requiredCardKinds: ['火殺', 'tiesuo', 'huogong'],
+    excludeCardKinds: ['lebu', 'bingliang'],
     playerGeneralId: 'caocao',
     allies: [{ generalId: 'xuchu' }],
     allyChoices: ['zhangliao', 'xiahoudun', 'guojia'],
@@ -368,6 +371,7 @@ export function buildStageMatch(
     mode: 'duel',
     packs: resolveStagePacks(stage),
     requiredCardKinds: stage.requiredCardKinds,
+    excludeCardKinds: stage.excludeCardKinds,
     humanSeat: 0,
     players,
     victory: stage.victory,

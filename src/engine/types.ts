@@ -135,8 +135,10 @@ export interface VictoryRule {
 export interface MatchConfig {
   mode: GameMode
   packs: PackId[]
-  /** Guarantee these card kinds appear in the shuffled deck */
+  /** Guarantee these card kinds / names appear in the shuffled deck */
   requiredCardKinds?: string[]
+  /** Drop these card kinds / names from the deck (after pack filter) */
+  excludeCardKinds?: string[]
   humanSeat: number
   players: Array<{
     name: string

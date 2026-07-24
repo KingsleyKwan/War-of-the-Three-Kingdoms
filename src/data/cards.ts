@@ -160,20 +160,27 @@ export function getCardDef(id: string): CardDef {
 
 export function buildDeck(
   packs: PackId[],
-  opts?: { requiredKinds?: string[] },
+  opts?: { requiredKinds?: string[]; excludeKinds?: string[] },
 ): CardDef[] {
   const set = new Set(packs)
-  const deck = CARD_DEFS.filter((c) => set.has(c.pack))
+  const excluded = new Set(opts?.excludeKinds ?? [])
+  const matchesKey = (c: CardDef, key: string) => c.kind === key || c.name === key
+  const deck = CARD_DEFS.filter(
+    (c) => set.has(c.pack) && ![...excluded].some((k) => matchesKey(c, k)),
+  )
+
   const required = opts?.requiredKinds ?? []
   if (!required.length) return deck
 
   const out = [...deck]
-  const has = (key: string) => out.some((c) => c.kind === key || c.name === key)
+  const has = (key: string) => out.some((c) => matchesKey(c, key))
   for (const key of required) {
+    if (excluded.has(key)) continue
     if (has(key)) continue
     for (const c of CARD_DEFS) {
-      if (c.kind !== key && c.name !== key) continue
-      if (!out.some((d) => d.id === c.id)) out.push(c)
+      if (!matchesKey(c, key)) continue
+      if (out.some((d) => d.id === c.id)) continue
+      out.push(c)
     }
   }
   return out

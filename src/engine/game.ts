@@ -79,7 +79,10 @@ export function clearPlayFx(state: GameSnapshot): void {
 
 export function createMatch(config: MatchConfig): GameSnapshot {
   uidSeq = 1
-  const defs = buildDeck(config.packs, { requiredKinds: config.requiredCardKinds })
+  const defs = buildDeck(config.packs, {
+    requiredKinds: config.requiredCardKinds,
+    excludeKinds: config.excludeCardKinds,
+  })
   const deck: CardInstance[] = shuffle(defs.map((d) => ({ uid: nextUid(), defId: d.id })))
 
   const defer = !!config.deferGeneralPick
