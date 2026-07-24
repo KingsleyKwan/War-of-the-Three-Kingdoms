@@ -300,8 +300,52 @@ function beginTurn(state: GameSnapshot): void {
   p.zhihengUsed = false
   p.rendeCount = 0
 
-  // 洛神：準備階段判定黑色則獲得判定牌，可重複直到紅色
   const skills = getGeneral(p.generalId).skills
+
+  // 判定階段：樂不思蜀／兵糧寸斷
+  state.phase = 'judge'
+  let skipDraw = false
+  let skipPlay = false
+  const pendingJudges = [...(p.judges ?? [])]
+  for (const jCard of pendingJudges) {
+    if (!p.judges?.some((x) => x.uid === jCard.uid)) continue
+    p.judges = p.judges.filter((x) => x.uid !== jCard.uid)
+    const jdef = getCardDef(jCard.defId)
+    const judged = drawJudgeCard(state, shuffle)
+    let suit = judged ? getCardDef(judged.defId).suit : null
+    if (judged) {
+      discardCard(state, judged)
+      log(
+        state,
+        `${p.name} 的【${jdef.name}】判定：${getCardDef(judged.defId).name}`,
+      )
+      if (skills.includes('tiandu')) {
+        p.hand.push(judged)
+        state.discard.pop()
+        log(state, `${p.name} 發動天妒，獲得判定牌。`)
+      }
+    }
+    discardCard(state, jCard)
+    if (jdef.kind === 'lebu') {
+      // 紅桃無效
+      if (suit === 'heart') {
+        log(state, `【樂不思蜀】判定為紅桃，無效。`)
+      } else {
+        skipPlay = true
+        log(state, `【樂不思蜀】生效，${p.name} 本回合跳過出牌階段。`)
+      }
+    } else if (jdef.kind === 'bingliang') {
+      // 梅花無效
+      if (suit === 'club') {
+        log(state, `【兵糧寸斷】判定為梅花，無效。`)
+      } else {
+        skipDraw = true
+        log(state, `【兵糧寸斷】生效，${p.name} 本回合跳過摸牌階段。`)
+      }
+    }
+  }
+
+  // 洛神：準備／判定後，摸牌前
   if (skills.includes('luoshen')) {
     for (let i = 0; i < 8; i++) {
       const judged = drawJudgeCard(state, shuffle)
@@ -327,27 +371,43 @@ function beginTurn(state: GameSnapshot): void {
   }
 
   state.phase = 'draw'
-  let drawN = 2
-  if (skills.includes('yingzi')) drawN++
+  if (!skipDraw) {
+    let drawN = 2
+    if (skills.includes('yingzi')) drawN++
 
-  // 突襲：可少摸並拿別人手牌（簡化：若有敵人有手牌，少摸1並隨機得1張）
-  if (skills.includes('tuxi')) {
-    const victims = state.players.filter((o) => o.alive && o.id !== p.id && o.hand.length > 0)
-    if (victims.length) {
-      drawN = Math.max(0, drawN - 1)
-      const v = victims[Math.floor(Math.random() * victims.length)]
-      const c = v.hand.splice(Math.floor(Math.random() * v.hand.length), 1)[0]
-      p.hand.push(c)
-      log(state, `${p.name} 發動突襲，獲得 ${v.name} 一張手牌。`)
-      if (getGeneral(v.generalId).skills.includes('lianying') && v.hand.length === 0) {
-        draw(state, v.id, 1)
-        log(state, `${v.name} 發動連營，摸一張牌。`)
+    // 突襲：可少摸並拿別人手牌（簡化：若有敵人有手牌，少摸1並隨機得1張）
+    if (skills.includes('tuxi')) {
+      const victims = state.players.filter((o) => o.alive && o.id !== p.id && o.hand.length > 0)
+      if (victims.length) {
+        drawN = Math.max(0, drawN - 1)
+        const v = victims[Math.floor(Math.random() * victims.length)]
+        const c = v.hand.splice(Math.floor(Math.random() * v.hand.length), 1)[0]
+        p.hand.push(c)
+        log(state, `${p.name} 發動突襲，獲得 ${v.name} 一張手牌。`)
+        if (getGeneral(v.generalId).skills.includes('lianying') && v.hand.length === 0) {
+          draw(state, v.id, 1)
+          log(state, `${v.name} 發動連營，摸一張牌。`)
+        }
       }
     }
+
+    draw(state, p.id, drawN)
+    log(state, `${p.name} 摸了 ${drawN} 張牌。`)
+  } else {
+    log(state, `${p.name} 跳過摸牌階段。`)
   }
 
-  draw(state, p.id, drawN)
-  log(state, `${p.name} 摸了 ${drawN} 張牌。`)
+  if (skipPlay) {
+    log(state, `${p.name} 跳過出牌階段。`)
+    // 閉月仍可在結束時觸發：走 endPlayPhase 邏輯的摸牌部分
+    if (skills.includes('biyue')) {
+      draw(state, p.id, 1)
+      log(state, `${p.name} 發動閉月，摸一張牌。`)
+    }
+    advanceTurn(state)
+    return
+  }
+
   state.phase = 'play'
   setPlayPrompt(state)
 }
@@ -395,10 +455,23 @@ function canPlayCard(state: GameSnapshot, playerId: number, uid: string): boolea
       continue
     }
     if (k === 'shan' || k === 'wuxie') continue
-    if (k === 'wuzhong' || k === 'taoyuan' || k === 'wugu' || k === 'nanman' || k === 'wanjian') return true
+    if (k === 'wuzhong' || k === 'taoyuan' || k === 'wugu' || k === 'nanman' || k === 'wanjian')
+      return true
     if (k === 'guohe' || k === 'shunshou' || k === 'juedou' || k === 'huogong') {
       if (legalTargets(state, playerId, k).length > 0) return true
       continue
+    }
+    if (k === 'lebu' || k === 'bingliang') {
+      if (legalTargets(state, playerId, k).length > 0) return true
+      continue
+    }
+    if (k === 'jiedao') {
+      if (legalTargets(state, playerId, 'jiedao').length > 0) return true
+      continue
+    }
+    if (k === 'tiesuo') {
+      // 簡化：可重鑄（棄置摸一）或選兩名目標鏈接——本版改為棄置並摸一張
+      return true
     }
   }
   return false
@@ -481,43 +554,56 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
     return
   }
 
-  if (kind === 'wuzhong') {
+  if (kind === 'taoyuan') {
     takeHand(state, playerId, uid)
     discardCard(state, card)
-    draw(state, playerId, 2)
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: state.players.filter((t) => t.alive).map((t) => t.id),
+    })
+    log(state, `${p.name} 使用【桃園結義】。`)
+    afterTrick(state, p)
+    beginWuxieWindow(state, {
+      type: 'taoyuan',
+      sourceId: playerId,
+      healed: [],
+    })
+    return
+  }
+
+  if (kind === 'wugu') {
+    takeHand(state, playerId, uid)
+    discardCard(state, card)
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: state.players.filter((t) => t.alive).map((t) => t.id),
+    })
+    log(state, `${p.name} 使用【五穀豐登】。`)
+    afterTrick(state, p)
+    beginWuxieWindow(state, { type: 'wugu', sourceId: playerId })
+    return
+  }
+
+  if (kind === 'tiesuo') {
+    // 簡化：重鑄——棄置此牌並摸一張
+    takeHand(state, playerId, uid)
+    discardCard(state, card)
+    draw(state, playerId, 1)
     setPlayFx(state, {
       cardName: def.name,
       suit: def.suit,
       rank: def.rank,
       sourceId: playerId,
       targetIds: [playerId],
+      note: '重鑄',
     })
-    log(state, `${p.name} 使用【無中生有】，摸兩張牌。`)
-    afterTrick(state, p)
-    setPlayPrompt(state)
-    return
-  }
-
-  if (kind === 'taoyuan') {
-    takeHand(state, playerId, uid)
-    discardCard(state, card)
-    const healed = state.players.filter((pl) => pl.alive && pl.hp < pl.maxHp).map((pl) => pl.id)
-    for (const pl of state.players) {
-      if (pl.alive && pl.hp < pl.maxHp) pl.hp++
-    }
-    setPlayFx(state, {
-      cardName: def.name,
-      suit: def.suit,
-      rank: def.rank,
-      sourceId: playerId,
-      targetIds: healed.length ? healed : [playerId],
-    })
-    log(state, `${p.name} 使用【桃園結義】。`)
-    afterTrick(state, p)
-    const lord = state.players.find((pl) => pl.identity === 'lord' && pl.alive)
-    if (lord && healed.includes(lord.id)) {
-      observePublicEvent(state, { type: 'heal', sourceId: playerId, targetId: lord.id, kind: 'taoyuan' })
-    }
+    log(state, `${p.name} 重鑄【鐵索連環】，摸一張牌。`)
     setPlayPrompt(state)
     return
   }
@@ -527,7 +613,6 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
     discardCard(state, card)
     const others = state.players.filter((t) => {
       if (!t.alive || t.id === playerId) return false
-      // 藤甲：南蠻／萬箭無效
       if (armorKind(t) === 'tengjia') {
         log(state, `${t.name} 的【藤甲】使【${def.name}】無效。`)
         return false
@@ -544,7 +629,30 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
     log(state, `${p.name} 使用【${def.name}】。`)
     afterTrick(state, p)
     observePublicEvent(state, { type: 'aoe', sourceId: playerId, kind })
-    resolveAOE(state, playerId, others.map((t) => t.id), kind === 'nanman' ? 'sha' : 'shan', def.name)
+    beginWuxieWindow(state, {
+      type: 'aoe',
+      sourceId: playerId,
+      kind,
+      name: def.name,
+      targets: others.map((t) => t.id),
+      need: kind === 'nanman' ? 'sha' : 'shan',
+    })
+    return
+  }
+
+  if (kind === 'wuzhong') {
+    takeHand(state, playerId, uid)
+    discardCard(state, card)
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [playerId],
+    })
+    log(state, `${p.name} 使用【無中生有】。`)
+    afterTrick(state, p)
+    beginWuxieWindow(state, { type: 'wuzhong', sourceId: playerId })
     return
   }
 
@@ -575,6 +683,250 @@ function afterTrick(state: GameSnapshot, p: PlayerState): void {
   if (getGeneral(p.generalId).skills.includes('jizhi')) {
     draw(state, p.id, 1)
     log(state, `${p.name} 發動集智，摸一張牌。`)
+  }
+}
+
+type PendingTrick =
+  | { type: 'wuzhong'; sourceId: number }
+  | { type: 'taoyuan'; sourceId: number; healed: number[] }
+  | { type: 'wugu'; sourceId: number }
+  | {
+      type: 'aoe'
+      sourceId: number
+      kind: string
+      name: string
+      targets: number[]
+      need: 'sha' | 'shan'
+    }
+  | { type: 'guohe'; sourceId: number; targetId: number }
+  | { type: 'shunshou'; sourceId: number; targetId: number }
+  | { type: 'juedou'; sourceId: number; targetId: number }
+  | { type: 'huogong'; sourceId: number; targetId: number }
+  | {
+      type: 'delayed'
+      sourceId: number
+      targetId: number
+      card: CardInstance
+      kind: string
+      name: string
+    }
+  | { type: 'jiedao'; sourceId: number; holderId: number; killTargetId: number }
+
+type WuxieState = {
+  trick: PendingTrick
+  cursor: number
+  nullified: boolean
+  asked: number
+}
+
+function getWuxie(state: GameSnapshot): WuxieState | undefined {
+  return (state as GameSnapshot & { _wuxie?: WuxieState })._wuxie
+}
+
+function clearWuxie(state: GameSnapshot): void {
+  delete (state as GameSnapshot & { _wuxie?: WuxieState })._wuxie
+}
+
+function beginWuxieWindow(state: GameSnapshot, trick: PendingTrick): void {
+  ;(state as GameSnapshot & { _wuxie?: WuxieState })._wuxie = {
+    trick,
+    cursor: (trick.sourceId + 1) % state.players.length,
+    nullified: false,
+    asked: 0,
+  }
+  continueWuxieAsk(state)
+}
+
+function continueWuxieAsk(state: GameSnapshot): void {
+  const w = getWuxie(state)
+  if (!w) return
+  const n = state.players.length
+  while (w.asked < n) {
+    const seat = w.cursor
+    w.cursor = (w.cursor + 1) % n
+    w.asked++
+    const p = state.players[seat]
+    if (!p.alive) continue
+    const wuxieCards = p.hand.filter((c) => cardKind(c) === 'wuxie')
+    if (!wuxieCards.length) continue
+    state.prompt = {
+      kind: 'choice',
+      message: `【無懈可擊】${p.name}：是否無懈當前錦囊？`,
+      actorId: seat,
+      choiceKey: 'wuxie',
+      cardUids: wuxieCards.map((c) => c.uid),
+      choices: [
+        { id: 'use', label: '使用無懈可擊' },
+        { id: 'skip', label: '不使用' },
+      ],
+    }
+    return
+  }
+  // No more asks
+  const trick = w.trick
+  const nullified = w.nullified
+  clearWuxie(state)
+  if (nullified) {
+    log(state, `錦囊效果被【無懈可擊】抵消。`)
+    if (trick.type === 'delayed') discardCard(state, trick.card)
+    if (state.phase === 'play') setPlayPrompt(state)
+    return
+  }
+  resolvePendingTrick(state, trick)
+}
+
+function resolvePendingTrick(state: GameSnapshot, trick: PendingTrick): void {
+  if (trick.type === 'wuzhong') {
+    draw(state, trick.sourceId, 2)
+    log(state, `${state.players[trick.sourceId].name} 因【無中生有】摸兩張牌。`)
+    setPlayPrompt(state)
+    return
+  }
+  if (trick.type === 'taoyuan') {
+    const healed: number[] = []
+    for (const pl of state.players) {
+      if (pl.alive && pl.hp < pl.maxHp) {
+        pl.hp++
+        healed.push(pl.id)
+      }
+    }
+    log(state, `【桃園結義】生效，傷者各回 1 體力。`)
+    const lord = state.players.find((pl) => pl.identity === 'lord' && pl.alive)
+    if (lord && healed.includes(lord.id)) {
+      observePublicEvent(state, {
+        type: 'heal',
+        sourceId: trick.sourceId,
+        targetId: lord.id,
+        kind: 'taoyuan',
+      })
+    }
+    setPlayPrompt(state)
+    return
+  }
+  if (trick.type === 'wugu') {
+    startWugu(state, trick.sourceId)
+    return
+  }
+  if (trick.type === 'aoe') {
+    resolveAOE(state, trick.sourceId, trick.targets, trick.need, trick.name)
+    return
+  }
+  if (trick.type === 'guohe') {
+    askDismantle(state, trick.sourceId, trick.targetId)
+    return
+  }
+  if (trick.type === 'shunshou') {
+    beginZonePick(state, {
+      actorId: trick.sourceId,
+      ownerId: trick.targetId,
+      count: 1,
+      skillId: 'shunshou',
+      mode: 'steal',
+      message: `【順手牽羊】選擇獲得 ${state.players[trick.targetId].name} 的一張牌`,
+    })
+    return
+  }
+  if (trick.type === 'juedou') {
+    resolveJuedou(state, trick.sourceId, trick.targetId)
+    return
+  }
+  if (trick.type === 'huogong') {
+    dealDamage(state, trick.targetId, 1, trick.sourceId, 'fire')
+    if (!isAwaitingZonePick(state)) setPlayPrompt(state)
+    return
+  }
+  if (trick.type === 'delayed') {
+    const t = state.players[trick.targetId]
+    if (!t.judges) t.judges = []
+    t.judges.push(trick.card)
+    log(state, `【${trick.name}】進入 ${t.name} 的判定區。`)
+    setPlayPrompt(state)
+    return
+  }
+  if (trick.type === 'jiedao') {
+    // Ask holder to kill or give weapon
+    const holder = state.players[trick.holderId]
+    const shaCards = responseCards(holder, 'sha')
+    state.prompt = {
+      kind: 'choice',
+      message: `【借刀殺人】${holder.name}：是否對 ${state.players[trick.killTargetId].name} 出【殺】？否則交出武器。`,
+      actorId: trick.holderId,
+      choiceKey: 'jiedao',
+      targetIds: [trick.killTargetId],
+      cardUids: shaCards.map((c) => c.uid),
+      selectedTargetIds: [trick.sourceId, trick.holderId, trick.killTargetId],
+      choices: [
+        ...(shaCards.length
+          ? [{ id: 'sha', label: '打出【殺】' }]
+          : []),
+        { id: 'give', label: '交出武器' },
+      ],
+    }
+    return
+  }
+}
+
+type WuguState = {
+  pool: CardInstance[]
+  order: number[]
+  index: number
+}
+
+function getWugu(state: GameSnapshot): WuguState | undefined {
+  return (state as GameSnapshot & { _wugu?: WuguState })._wugu
+}
+
+function clearWugu(state: GameSnapshot): void {
+  delete (state as GameSnapshot & { _wugu?: WuguState })._wugu
+}
+
+function startWugu(state: GameSnapshot, sourceId: number): void {
+  const order: number[] = []
+  const n = state.players.length
+  for (let i = 0; i < n; i++) {
+    const id = (sourceId + i) % n
+    if (state.players[id].alive) order.push(id)
+  }
+  const pool: CardInstance[] = []
+  for (let i = 0; i < order.length; i++) {
+    if (state.deck.length === 0) {
+      if (state.discard.length === 0) break
+      state.deck = shuffle(state.discard)
+      state.discard = []
+    }
+    const c = state.deck.pop()
+    if (c) pool.push(c)
+  }
+  if (!pool.length) {
+    log(state, `【五穀豐登】牌堆不足，無效。`)
+    setPlayPrompt(state)
+    return
+  }
+  log(state, `【五穀豐登】亮出 ${pool.length} 張牌。`)
+  ;(state as GameSnapshot & { _wugu?: WuguState })._wugu = { pool, order, index: 0 }
+  askWuguPick(state)
+}
+
+function askWuguPick(state: GameSnapshot): void {
+  const w = getWugu(state)
+  if (!w) return
+  if (w.index >= w.order.length || !w.pool.length) {
+    for (const c of w.pool) discardCard(state, c)
+    clearWugu(state)
+    setPlayPrompt(state)
+    return
+  }
+  const seat = w.order[w.index]
+  const p = state.players[seat]
+  state.prompt = {
+    kind: 'choice',
+    message: `【五穀豐登】${p.name} 選擇一張牌`,
+    actorId: seat,
+    choiceKey: 'wugu',
+    choices: w.pool.map((c) => {
+      const d = getCardDef(c.defId)
+      return { id: c.uid, label: d.name }
+    }),
   }
 }
 
@@ -619,6 +971,29 @@ function legalTargets(state: GameSnapshot, playerId: number, kind: string): numb
       })
       .map((t) => t.id)
   }
+  if (kind === 'lebu' || kind === 'bingliang') {
+    return state.players
+      .filter((t) => {
+        if (!t.alive || t.id === playerId) return false
+        if (
+          kind === 'lebu' &&
+          t.generalId &&
+          getGeneral(t.generalId).skills.includes('qianxun')
+        ) {
+          return false
+        }
+        // 同名延時錦囊通常不重複
+        if ((t.judges ?? []).some((j) => getCardDef(j.defId).kind === kind)) return false
+        return true
+      })
+      .map((t) => t.id)
+  }
+  if (kind === 'jiedao') {
+    // First pick: someone with a weapon (not self)
+    return state.players
+      .filter((t) => t.alive && t.id !== playerId && !!t.equips.weapon)
+      .map((t) => t.id)
+  }
   return []
 }
 
@@ -628,6 +1003,36 @@ export function selectTarget(state: GameSnapshot, playerId: number, targetId: nu
   const uid = state.prompt.cardUids?.[0]
   const kind = state.prompt.respondKinds?.[0]
   if (!uid || !kind) return
+
+  if (kind === 'jiedao_kill') {
+    const holderId = state.prompt.selectedTargetIds?.[0]
+    if (holderId === undefined) return
+    const p = state.players[playerId]
+    const card = takeHand(state, playerId, uid)
+    if (!card) return
+    discardCard(state, card)
+    const def = getCardDef(card.defId)
+    const holder = state.players[holderId]
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [holderId, targetId],
+    })
+    log(
+      state,
+      `${p.name} 使用【借刀殺人】，令 ${holder.name} 對 ${state.players[targetId].name} 出殺。`,
+    )
+    afterTrick(state, p)
+    beginWuxieWindow(state, {
+      type: 'jiedao',
+      sourceId: playerId,
+      holderId,
+      killTargetId: targetId,
+    })
+    return
+  }
 
   const maxTargets = state.prompt.maxTargets ?? 1
   const selected = [...(state.prompt.selectedTargetIds ?? [])]
@@ -666,6 +1071,64 @@ function finishTargetedCard(
   kind: string,
   targetIds: number[],
 ): void {
+  // 借刀：先選持刀者，不扣牌，再選殺目標
+  if (kind === 'jiedao') {
+    const targetId = targetIds[0]
+    if (targetId === undefined) return
+    const holder = state.players[targetId]
+    const killTargets = state.players
+      .filter(
+        (t) =>
+          t.alive &&
+          t.id !== targetId &&
+          t.id !== playerId &&
+          canReach(state, targetId, t.id),
+      )
+      .map((t) => t.id)
+    if (!killTargets.length) {
+      log(state, `${holder.name} 的攻擊範圍內沒有可殺目標，無法借刀。`)
+      setPlayPrompt(state)
+      return
+    }
+    state.prompt = {
+      kind: 'choose_target',
+      message: `【借刀殺人】選擇 ${holder.name} 殺的目標`,
+      actorId: playerId,
+      targetIds: killTargets,
+      cardUids: [uid],
+      respondKinds: ['jiedao_kill'],
+      selectedTargetIds: [targetId],
+    }
+    return
+  }
+
+  if (kind === 'lebu' || kind === 'bingliang') {
+    const targetId = targetIds[0]
+    if (targetId === undefined) return
+    const p = state.players[playerId]
+    const card = takeHand(state, playerId, uid)
+    if (!card) return
+    const def = getCardDef(card.defId)
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [targetId],
+    })
+    log(state, `${p.name} 對 ${state.players[targetId].name} 使用【${def.name}】。`)
+    afterTrick(state, p)
+    beginWuxieWindow(state, {
+      type: 'delayed',
+      sourceId: playerId,
+      targetId,
+      card,
+      kind,
+      name: def.name,
+    })
+    return
+  }
+
   const p = state.players[playerId]
   const card = takeHand(state, playerId, uid)
   if (!card) return
@@ -775,7 +1238,7 @@ function finishTargetedCard(
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【決鬥】。`)
     afterTrick(state, p)
     observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId, kind: 'juedou' })
-    resolveJuedou(state, playerId, targetId)
+    beginWuxieWindow(state, { type: 'juedou', sourceId: playerId, targetId })
     return
   }
 
@@ -790,7 +1253,7 @@ function finishTargetedCard(
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【過河拆橋】。`)
     afterTrick(state, p)
     observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId, kind: '過河拆橋' })
-    askDismantle(state, playerId, targetId)
+    beginWuxieWindow(state, { type: 'guohe', sourceId: playerId, targetId })
     return
   }
 
@@ -805,14 +1268,7 @@ function finishTargetedCard(
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【順手牽羊】。`)
     afterTrick(state, p)
     observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId, kind: '順手牽羊' })
-    beginZonePick(state, {
-      actorId: playerId,
-      ownerId: targetId,
-      count: 1,
-      skillId: 'shunshou',
-      mode: 'steal',
-      message: `【順手牽羊】選擇獲得 ${state.players[targetId].name} 的一張牌`,
-    })
+    beginWuxieWindow(state, { type: 'shunshou', sourceId: playerId, targetId })
     return
   }
 
@@ -827,8 +1283,7 @@ function finishTargetedCard(
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【火攻】。`)
     afterTrick(state, p)
     observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId, kind: 'huogong' })
-    dealDamage(state, targetId, 1, playerId, 'fire')
-    if (!isAwaitingZonePick(state)) setPlayPrompt(state)
+    beginWuxieWindow(state, { type: 'huogong', sourceId: playerId, targetId })
     return
   }
 
@@ -1622,6 +2077,122 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
     const uids = state.prompt.selectedCardUids ?? []
     const tid = Number(choiceId)
     finishZhangba(state, playerId, uids, tid)
+    return
+  }
+
+  if (key === 'wuxie') {
+    const w = getWuxie(state)
+    if (!w) {
+      setPlayPrompt(state)
+      return
+    }
+    if (choiceId === 'use') {
+      const uid = state.prompt.cardUids?.[0]
+      const p = state.players[playerId]
+      const card = uid ? takeHand(state, playerId, uid) : null
+      if (card) {
+        discardCard(state, card)
+        w.nullified = !w.nullified
+        log(
+          state,
+          `${p.name} 使用【無懈可擊】${w.nullified ? '抵消' : '再次無懈，效果恢復'}錦囊。`,
+        )
+        if (state.players.find((x) => x.identity === 'lord')?.id !== undefined) {
+          const lord = state.players.find((x) => x.identity === 'lord')
+          const trick = w.trick
+          const protectsLord =
+            (trick.type === 'aoe' && lord && trick.targets.includes(lord.id)) ||
+            (trick.type === 'juedou' && lord && trick.targetId === lord.id) ||
+            (trick.type === 'guohe' && lord && trick.targetId === lord.id) ||
+            (trick.type === 'huogong' && lord && trick.targetId === lord.id) ||
+            (trick.type === 'delayed' && lord && trick.targetId === lord.id)
+          if (protectsLord && w.nullified) {
+            observePublicEvent(state, {
+              type: 'defend_lord',
+              sourceId: playerId,
+              via: '使用【無懈可擊】守護主公相關效果',
+            })
+          }
+        }
+      }
+    }
+    continueWuxieAsk(state)
+    return
+  }
+
+  if (key === 'wugu') {
+    const w = getWugu(state)
+    if (!w) {
+      setPlayPrompt(state)
+      return
+    }
+    const idx = w.pool.findIndex((c) => c.uid === choiceId)
+    if (idx < 0) return
+    const [got] = w.pool.splice(idx, 1)
+    state.players[playerId].hand.push(got)
+    log(
+      state,
+      `${state.players[playerId].name} 獲得【${getCardDef(got.defId).name}】。`,
+    )
+    w.index++
+    askWuguPick(state)
+    return
+  }
+
+  if (key === 'jiedao') {
+    const ids = state.prompt.selectedTargetIds ?? []
+    const sourceId = ids[0]
+    const holderId = ids[1]
+    const killTargetId = ids[2]
+    if (sourceId === undefined || holderId === undefined || killTargetId === undefined) {
+      setPlayPrompt(state)
+      return
+    }
+    const holder = state.players[holderId]
+    if (choiceId === 'sha') {
+      const uid = state.prompt.cardUids?.[0]
+      if (uid) {
+        const card = takeHand(state, holderId, uid)
+        if (card) {
+          discardCard(state, card)
+          holder.shaUsedThisTurn = true
+          log(
+            state,
+            `${holder.name} 因【借刀殺人】對 ${state.players[killTargetId].name} 使用【殺】。`,
+          )
+          observePublicEvent(state, {
+            type: 'attack',
+            sourceId: holderId,
+            targetId: killTargetId,
+            kind: 'sha',
+          })
+          state.pending = {
+            type: 'sha',
+            sourceId: holderId,
+            targetId: killTargetId,
+            cardUid: card.uid,
+            damageCard: card,
+          }
+          askShan(state, holderId, killTargetId, card.uid)
+          return
+        }
+      }
+    }
+    // Give weapon to 借刀 user
+    const weapon = holder.equips.weapon
+    if (weapon) {
+      holder.equips.weapon = undefined
+      state.players[sourceId].hand.push(weapon)
+      log(
+        state,
+        `${holder.name} 交出【${getCardDef(weapon.defId).name}】給 ${state.players[sourceId].name}。`,
+      )
+      if (getGeneral(holder.generalId).skills.includes('xiaoji')) {
+        draw(state, holderId, 2)
+        log(state, `${holder.name} 發動梟姬，摸兩張牌。`)
+      }
+    }
+    setPlayPrompt(state)
     return
   }
 }

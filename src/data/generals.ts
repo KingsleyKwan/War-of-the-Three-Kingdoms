@@ -188,7 +188,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['qianxun', 'lianying'],
-    skillText: '謙遜：不能成為順手牽羊的目標。連營：失去最後的手牌時摸一張。',
+    skillText: '謙遜：不能成為順手牽羊、樂不思蜀的目標。連營：失去最後的手牌時摸一張。',
   },
   {
     id: 'sunshangxiang',

@@ -16,7 +16,7 @@ import type { GameSnapshot } from '../engine/types'
 import { getCardDef } from '../data/cards'
 import { loadSettings } from '../persist/settings'
 import { stepAiSmart } from './decide'
-import { scoreAttackTarget, setSeatThought } from './mind'
+import { believedHostile, scoreAttackTarget, setSeatThought } from './mind'
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -224,14 +224,18 @@ function scorePlay(state: GameSnapshot, playerId: number, uid: string, asKind?: 
   if (def.type === 'equip') return 20
   if (kind === 'tao' && p.hp < p.maxHp) return 18
   if (kind === 'wuzhong') return 16
+  if (kind === 'wugu') return 15
   if (kind === 'sha') {
     return 14
   }
   if (kind === 'juedou') return 12
   if (kind === 'guohe' || kind === 'shunshou') return 11
   if (kind === 'nanman' || kind === 'wanjian') return 10
+  if (kind === 'jiedao') return 10
+  if (kind === 'lebu' || kind === 'bingliang') return 9
   if (kind === 'huogong') return 9
   if (kind === 'taoyuan') return 8
+  if (kind === 'tiesuo') return 6
   return 1
 }
 
@@ -298,6 +302,34 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
   if (key === 'ganglie') return ids.includes('discard') ? 'discard' : 'damage'
   if (key === 'rende_target' || key === 'zhangba_target') {
     return ids[0] ?? null
+  }
+  if (key === 'wuxie') {
+    const w = (state as GameSnapshot & { _wuxie?: { trick: { type: string; targetId?: number; targets?: number[]; sourceId: number }; nullified: boolean } })._wuxie
+    if (!w || !ids.includes('use')) return ids.includes('skip') ? 'skip' : ids[0] ?? null
+    const trick = w.trick
+    const hitsMe =
+      (trick.type === 'aoe' && (trick.targets ?? []).includes(playerId)) ||
+      (typeof trick.targetId === 'number' && trick.targetId === playerId)
+    const fromEnemy = believedHostile(state, playerId, trick.sourceId)
+    // If effect is currently on and hits me from enemy → nullify; if already nullified and I want it back...
+    if (hitsMe && fromEnemy && !w.nullified) return 'use'
+    if (!hitsMe && fromEnemy && trick.type === 'aoe' && !w.nullified) {
+      // Optional: protect allies from AOE
+      return 'skip'
+    }
+    return 'skip'
+  }
+  if (key === 'wugu') {
+    return ids[0] ?? null
+  }
+  if (key === 'jiedao') {
+    if (ids.includes('sha')) {
+      const killId = state.prompt.targetIds?.[0]
+      if (killId !== undefined && scoreAttackTarget(state, playerId, killId) > 0) {
+        return 'sha'
+      }
+    }
+    return ids.includes('give') ? 'give' : ids[0] ?? null
   }
   return choices[0].id
 }
