@@ -1,4 +1,5 @@
 import type { GeneralDef, PackId } from '../engine/types'
+import { EXPANSION_GENERALS } from './generalsExpand'
 
 export const GENERALS: GeneralDef[] = [
   {
@@ -302,6 +303,7 @@ export const GENERALS: GeneralDef[] = [
     pack: 'standard',
     skillText: '普通士兵。',
   },
+  ...EXPANSION_GENERALS,
 ]
 
 const byId = new Map(GENERALS.map((g) => [g.id, g]))
@@ -313,7 +315,14 @@ export function getGeneral(id: string): GeneralDef {
 }
 
 export function listGeneralsForPick(packs?: PackId[]): GeneralDef[] {
-  const exclude = new Set(['soldier', 'huaxiong', 'zhangxiu', 'yuanshao'])
+  const exclude = new Set([
+    'soldier',
+    'huaxiong',
+    'zhangxiu',
+    'yuanshao',
+    'yanbaihu',
+    'liubiao',
+  ])
   const packSet = packs?.length ? new Set(packs) : null
   return GENERALS.filter((g) => {
     if (exclude.has(g.id)) return false

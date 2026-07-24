@@ -1,4 +1,5 @@
 import { buildDeck, getCardDef } from '../data/cards'
+import { cardPacksOnly } from '../data/packs'
 import { getGeneral } from '../data/generals'
 import type {
   CardInstance,
@@ -14,6 +15,7 @@ import {
   canReach,
   cardKind,
   checkVictory,
+  distanceMod,
   enemiesOf,
   equipSlots,
   findCard,
@@ -21,6 +23,7 @@ import {
   isBlackCard,
   isRedCard,
   removeHand as removeHandCard,
+  seatDistance,
   shuffle,
 } from './helpers'
 import {
@@ -79,7 +82,7 @@ export function clearPlayFx(state: GameSnapshot): void {
 
 export function createMatch(config: MatchConfig): GameSnapshot {
   uidSeq = 1
-  const defs = buildDeck(config.packs, {
+  const defs = buildDeck(cardPacksOnly(config.packs), {
     requiredKinds: config.requiredCardKinds,
     excludeKinds: config.excludeCardKinds,
   })
@@ -1151,8 +1154,17 @@ function finishTargetedCard(
       state,
       `${p.name} 對 ${targetIds.map((id) => state.players[id].name).join('、')} 使用【殺】。`,
     )
+    if (p.generalId && getGeneral(p.generalId).skills.includes('jiang')) {
+      draw(state, playerId, 1)
+      log(state, `${p.name} 發動激昂，摸一張牌。`)
+    }
     for (const tid of targetIds) {
       observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId: tid, kind: 'sha' })
+      const tp = state.players[tid]
+      if (tp.generalId && getGeneral(tp.generalId).skills.includes('jiang')) {
+        draw(state, tid, 1)
+        log(state, `${tp.name} 發動激昂，摸一張牌。`)
+      }
     }
 
     const startShaVs = (tid: number, extras: number[]) => {
@@ -1239,6 +1251,15 @@ function finishTargetedCard(
       targetIds: [targetId],
     })
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【決鬥】。`)
+    if (p.generalId && getGeneral(p.generalId).skills.includes('jiang')) {
+      draw(state, playerId, 1)
+      log(state, `${p.name} 發動激昂，摸一張牌。`)
+    }
+    const jt = state.players[targetId]
+    if (jt.generalId && getGeneral(jt.generalId).skills.includes('jiang')) {
+      draw(state, targetId, 1)
+      log(state, `${jt.name} 發動激昂，摸一張牌。`)
+    }
     afterTrick(state, p)
     observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId, kind: 'juedou' })
     beginWuxieWindow(state, { type: 'juedou', sourceId: playerId, targetId })
@@ -1375,6 +1396,16 @@ function askShan(state: GameSnapshot, sourceId: number, targetId: number, cardUi
       log(state, `${source.name} 鐵騎判定：${jdef.name}${red ? '（紅，目標不能出閃）' : '（黑）'}`)
       if (red) skipShan = true
     }
+  }
+  // 烈弓：目標手牌數≥來源則不能出閃
+  if (
+    !skipShan &&
+    source.generalId &&
+    getGeneral(source.generalId).skills.includes('liegong') &&
+    target.hand.length >= source.hand.length
+  ) {
+    skipShan = true
+    log(state, `${source.name} 發動烈弓，${target.name} 不能出【閃】。`)
   }
   if (skipShan) {
     state.pending.skipShan = true
@@ -2716,6 +2747,27 @@ function dealDamage(
       draw(state, targetId, n)
       log(state, `${t.name} 發動遺計，摸 ${n} 張牌。`)
     }
+    // 節命：摸已損失體力數（至少1）
+    if (afterSkills.includes('jieming') && amount > 0) {
+      const n = Math.max(1, t.maxHp - Math.max(t.hp, 0))
+      draw(state, targetId, n)
+      log(state, `${t.name} 發動節命，摸 ${n} 張牌。`)
+    }
+  }
+
+  // 狂骨：來源對距離1目標造成傷害後回1體力
+  if (source && sourceId !== null && amount > 0 && source.generalId) {
+    if (getGeneral(source.generalId).skills.includes('kuanggu')) {
+      const alive = state.players.map((p) => p.alive)
+      const base = seatDistance(sourceId, targetId, state.players.length, alive)
+      const fm = distanceMod(source)
+      const tm = distanceMod(t)
+      const dist = Math.max(1, base - fm.minus + tm.plus)
+      if (dist <= 1 && source.hp < source.maxHp) {
+        source.hp += 1
+        log(state, `${source.name} 發動狂骨，回復1點體力。`)
+      }
+    }
   }
 
   if (t.hp <= 0) {
@@ -2815,6 +2867,14 @@ function trySave(state: GameSnapshot, targetId: number, killerId: number | null 
     t.hp += 1
     log(state, `${t.name} 使用【桃】求救，體力回覆至 ${t.hp}。`)
   }
+  // 不屈（簡化）：瀕死摸一張，若仍有手牌則回至1體力
+  if (t.hp <= 0 && t.generalId && getGeneral(t.generalId).skills.includes('buqu')) {
+    draw(state, targetId, 1)
+    if (t.hand.length > 0) {
+      t.hp = 1
+      log(state, `${t.name} 發動不屈，體力回覆至1。`)
+    }
+  }
   if (t.hp <= 0) {
     t.hand.forEach((c) => discardCard(state, c))
     t.hand = []
@@ -2851,6 +2911,14 @@ function trySave(state: GameSnapshot, targetId: number, killerId: number | null 
         log(state, `${victimName} 陣亡，為 ${killerName} 所殺。`)
       } else {
         log(state, `${victimName} 陣亡。`)
+      }
+      // 行殤：其他角色死亡時摸兩張
+      for (const p of state.players) {
+        if (!p.alive || p.id === targetId || !p.generalId) continue
+        if (getGeneral(p.generalId).skills.includes('xingshang')) {
+          draw(state, p.id, 2)
+          log(state, `${p.name} 發動行殤，摸兩張牌。`)
+        }
       }
     }
   }

@@ -1,50 +1,9 @@
-import type { GameSnapshot, Identity, MatchConfig, PackId, VictoryRule } from '../../engine/types'
+import type { GameSnapshot, Identity, MatchConfig, PackId } from '../../engine/types'
 import { getGeneral, listGeneralsForPick } from '../generals'
 import { normalizePacks } from '../packs'
-import type { MapMovement } from './map'
+import type { CampaignStage } from './types'
 
-export interface CampaignStage {
-  id: string
-  index: number
-  title: string
-  subtitle: string
-  /** Historical era label, e.g. 中平元年 */
-  era: string
-  /** City id on the campaign map */
-  battlefieldCityId: string
-  /** City ownership at this moment in the story */
-  cityFactions: Record<string, string>
-  /** Troop / character movements shown on the map */
-  movements: MapMovement[]
-  /** Optional: only show these cities (defaults to factions + movements) */
-  visibleCityIds?: string[]
-  /** Story before the match */
-  briefing: string
-  /** Link from previous stage (shown above briefing) */
-  prevLink?: string
-  /** Base epilogue on win (dynamic lines appended) */
-  epilogueWin: string
-  /** Base epilogue on lose */
-  epilogueLose: string
-  /** After a win, tease the next stage */
-  bridgeNext?: string
-  /**
-   * Theme packs for this battlefield (unioned with packs of featured generals).
-   * Standard is always included. Example: 赤壁 → 軍爭 for 火殺／鐵索.
-   */
-  packs: PackId[]
-  /** Guarantee these card kinds / names appear in the deck */
-  requiredCardKinds?: string[]
-  /** Drop these kinds / names (e.g. trim delayed tricks on themed battles) */
-  excludeCardKinds?: string[]
-  /** Player is always 曹操 unless overridden */
-  playerGeneralId: string
-  allies: Array<{ generalId: string; name?: string }>
-  /** Optional ally the player may pick (one) */
-  allyChoices?: string[]
-  enemies: Array<{ generalId: string; name?: string }>
-  victory: VictoryRule
-}
+export type { CampaignStage } from './types'
 
 export const CAOCAO_CAMPAIGN_ID = 'caocao'
 
@@ -111,7 +70,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     packs: ['standard'],
     playerGeneralId: 'caocao',
     allies: [{ generalId: 'xiahoudun' }],
-    allyChoices: ['xuchu', 'zhangliao', 'dianwei_proxy'],
+    allyChoices: ['xuchu', 'zhangliao', 'dianwei'],
     enemies: [
       { generalId: 'huaxiong', name: '華雄' },
       { generalId: 'soldier', name: '西涼騎' },
@@ -185,7 +144,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     bridgeNext: '北方袁紹勢力日盛，官渡一線遲早一戰。曹操收攏兵馬，目光轉向河北。',
     packs: ['standard', 'ex'],
     playerGeneralId: 'caocao',
-    allies: [{ generalId: 'dianwei_proxy', name: '典韋' }],
+    allies: [{ generalId: 'dianwei', name: '典韋' }],
     allyChoices: ['xuchu', 'xiahoudun', 'guojia'],
     enemies: [
       { generalId: 'zhangxiu', name: '張繡' },
@@ -224,7 +183,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     bridgeNext: '北方稍定，江東孫權與劉備卻在長江聯手。赤壁的東風，已經在吹。',
     packs: ['standard', 'ex'],
     playerGeneralId: 'caocao',
-    allies: [{ generalId: 'xunyu_proxy', name: '荀彧' }],
+    allies: [{ generalId: 'xunyu', name: '荀彧' }],
     allyChoices: ['guojia', 'xiahoudun', 'zhangliao'],
     enemies: [
       { generalId: 'yuanshao', name: '袁紹' },
@@ -280,9 +239,10 @@ export const CAOCAO_STAGES: CampaignStage[] = [
 ]
 
 /** Map proxy ids used only in choices / allies */
+/** Legacy aliases kept for old saves / links */
 const CHOICE_ALIAS: Record<string, string> = {
-  dianwei_proxy: 'xuchu', // MVP: 典韋用許褚代替直至專屬武將加入
-  xunyu_proxy: 'guojia', // 荀彧暫以郭嘉代替
+  dianwei_proxy: 'dianwei',
+  xunyu_proxy: 'xunyu',
 }
 
 export function resolveGeneralId(id: string): string {
@@ -310,6 +270,7 @@ export function resolveStagePacks(stage: CampaignStage): PackId[] {
 
 const PROGRESS_KEY = 'wtk_caocao_progress'
 
+/** @deprecated use campaigns/index loadCampaignProgress(campaignId) */
 export function loadCampaignProgress(): number {
   try {
     const raw = localStorage.getItem(PROGRESS_KEY)
@@ -320,6 +281,7 @@ export function loadCampaignProgress(): number {
   }
 }
 
+/** @deprecated use campaigns/index unlockNextStage(campaignId, index) */
 export function unlockNextStage(clearedIndex: number): void {
   const cur = loadCampaignProgress()
   if (clearedIndex >= cur) {
@@ -394,7 +356,8 @@ export function buildStageEpilogue(stage: CampaignStage, game: GameSnapshot): st
   const aliveFoes = foes.filter((p) => p.alive)
   const deadFoes = foes.filter((p) => !p.alive)
 
-  const friendLabel = (p: (typeof friends)[0]) => (p.isHuman ? '曹操' : p.name)
+  const heroName = getGeneral(stage.playerGeneralId).name
+  const friendLabel = (p: (typeof friends)[0]) => (p.isHuman ? heroName : p.name)
 
   const lines: string[] = []
   lines.push(won ? stage.epilogueWin : stage.epilogueLose)
@@ -435,13 +398,13 @@ export function buildStageEpilogue(stage: CampaignStage, game: GameSnapshot): st
       )
     }
   } else if (won) {
-    lines.push('敵勢已盡，曹操於陣前收兵。')
+    lines.push(`敵勢已盡，${heroName}於陣前收兵。`)
   }
 
   if (won && stage.bridgeNext) {
     lines.push(stage.bridgeNext)
   } else if (!won) {
-    lines.push('重整旗鼓，或可再戰此關——曹操傳的路，不會止於此敗。')
+    lines.push(`重整旗鼓，或可再戰此關——${heroName}之路，不會止於此敗。`)
   }
 
   return lines.join('\n')

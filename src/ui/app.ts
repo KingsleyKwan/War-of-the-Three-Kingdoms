@@ -5,12 +5,14 @@ import {
   buildFreeMatch,
   buildStageEpilogue,
   buildStageMatch,
-  CAOCAO_STAGES,
+  CAMPAIGNS,
+  findStage,
+  getCampaign,
   loadCampaignProgress,
   resolveStagePacks,
   unlockNextStage,
   type CampaignStage,
-} from '../data/campaigns/caocao'
+} from '../data/campaigns'
 import { renderCampaignMap } from '../data/campaigns/map'
 import { getGeneral } from '../data/generals'
 import { CARD_HELP, rankLabel, suitName, suitSymbol } from '../data/help'
@@ -39,6 +41,7 @@ type Screen = 'start' | 'setup' | 'settings' | 'story' | 'stage' | 'table' | 'ep
 interface AppState {
   screen: Screen
   setupMode: GameMode
+  campaignId: string | null
   stage: CampaignStage | null
   allyChoice: string | null
   game: GameSnapshot | null
@@ -57,6 +60,7 @@ interface AppState {
 const app: AppState = {
   screen: 'start',
   setupMode: 'duel',
+  campaignId: null,
   stage: null,
   allyChoice: null,
   game: null,
@@ -147,7 +151,7 @@ function renderStart(): string {
     <div class="start-content">
       <p class="brand">sley</p>
       <h1 class="title">單機三國殺</h1>
-      <p class="tagline">E殺風格・自由對戰與曹操傳</p>
+      <p class="tagline">E殺風格・自由對戰與三國傳記</p>
       <div class="cta-row">
         <button type="button" class="btn primary" data-go="setup">自由對戰</button>
         <button type="button" class="btn" data-go="story">劇情模式</button>
@@ -319,18 +323,44 @@ async function startFreeMatch(): Promise<void> {
 }
 
 function renderStoryList(): string {
-  const progress = loadCampaignProgress()
-  return `
+  if (!app.campaignId) {
+    return `
   <div class="screen panel-screen">
     <header class="topbar">
       <button type="button" class="btn ghost" data-back>返回</button>
-      <h2>劇情・曹操傳</h2>
+      <h2>劇情模式</h2>
     </header>
-    <p class="story-intro">取材 E殺曹操傳風格的單人關卡。潁川至赤壁已開放，關卡以地圖與劇情相連。</p>
+    <p class="story-intro">選擇傳記。關卡會依登場武將自動啟用對應卡包（風／火／林／山／一將等）。</p>
+    <ul class="stage-list campaign-pick">
+      ${CAMPAIGNS.map((c) => {
+        const progress = loadCampaignProgress(c.id)
+        const cleared = Math.min(progress - 1, c.stages.length)
+        return `<li>
+          <button type="button" data-campaign="${c.id}">
+            <span class="idx">${escapeHtml(c.title)}</span>
+            <span class="st">${escapeHtml(c.blurb)}</span>
+            <span class="sub">進度 ${cleared}/${c.stages.length}</span>
+          </button>
+        </li>`
+      }).join('')}
+    </ul>
+  </div>`
+  }
+
+  const campaign = getCampaign(app.campaignId)!
+  const progress = loadCampaignProgress(campaign.id)
+  return `
+  <div class="screen panel-screen">
+    <header class="topbar">
+      <button type="button" class="btn ghost" data-back-campaigns>傳記列表</button>
+      <h2>劇情・${escapeHtml(campaign.title)}</h2>
+    </header>
+    <p class="story-intro">${escapeHtml(campaign.blurb)}</p>
     <ul class="stage-list">
-      ${CAOCAO_STAGES.map((s) => {
-        const locked = s.index > progress
-        return `<li class="${locked ? 'locked' : ''}">
+      ${campaign.stages
+        .map((s) => {
+          const locked = s.index > progress
+          return `<li class="${locked ? 'locked' : ''}">
           <button type="button" data-stage="${s.id}" ${locked ? 'disabled' : ''}>
             <span class="idx">第${s.index}關</span>
             <span class="st">${s.title}</span>
@@ -338,14 +368,8 @@ function renderStoryList(): string {
             ${locked ? '<span class="lock">未解鎖</span>' : ''}
           </button>
         </li>`
-      }).join('')}
-      <li class="locked soon">
-        <button type="button" disabled>
-          <span class="idx">第7關起</span>
-          <span class="st">更多關卡</span>
-          <span class="sub">即將加入</span>
-        </button>
-      </li>
+        })
+        .join('')}
     </ul>
   </div>`
 }
@@ -355,10 +379,22 @@ function bindStoryList(): void {
     app.screen = 'start'
     render()
   })
+  root().querySelector('[data-back-campaigns]')?.addEventListener('click', () => {
+    app.campaignId = null
+    render()
+  })
+  root().querySelectorAll('[data-campaign]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      app.campaignId = (btn as HTMLElement).dataset.campaign!
+      render()
+    })
+  })
   root().querySelectorAll('[data-stage]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = (btn as HTMLElement).dataset.stage!
-      app.stage = CAOCAO_STAGES.find((s) => s.id === id) ?? null
+      const found = findStage(id)
+      app.stage = found?.stage ?? null
+      app.campaignId = found?.campaign.id ?? app.campaignId
       app.allyChoice = app.stage?.allyChoices?.[0] ?? null
       app.screen = 'stage'
       render()
@@ -380,11 +416,10 @@ function renderStageBrief(): string {
 
   const fixedAllies = s.allies.map((a) => {
     if (a.name) return a.name
-    if (a.generalId === 'dianwei_proxy') return '典韋'
-    if (a.generalId === 'xunyu_proxy') return '荀彧'
     return getGeneral(a.generalId).name
   })
   const enemyNames = s.enemies.map((e) => e.name ?? getGeneral(e.generalId).name)
+  const heroName = getGeneral(s.playerGeneralId).name
 
   const forcesHtml = `
     <section class="intel-block">
@@ -393,7 +428,7 @@ function renderStageBrief(): string {
         <div>
           <p class="force-side">我方</p>
           <ul class="force-list">
-            <li>曹操</li>
+            <li>${escapeHtml(heroName)}</li>
             ${fixedAllies.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}
             ${choices.length ? '<li class="force-pick">＋自選副將</li>' : ''}
           </ul>
@@ -1211,8 +1246,8 @@ function maybeFinish(): void {
   }
   if (!app.matchEndPending) {
     if (g.config.campaignStageId && g.winnerIds.includes(0)) {
-      const stage = CAOCAO_STAGES.find((s) => s.id === g.config.campaignStageId)
-      if (stage) unlockNextStage(stage.index)
+      const found = findStage(g.config.campaignStageId)
+      if (found) unlockNextStage(found.campaign.id, found.stage.index)
     }
     app.matchEndPending = true
   }

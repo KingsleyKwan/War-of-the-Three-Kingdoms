@@ -29,6 +29,11 @@ export const CAMPAIGN_CITIES: Record<string, CampaignCity> = {
   ye: { id: 'ye', name: '鄴城', x: 58, y: 26 },
   chibi: { id: 'chibi', name: '赤壁', x: 58, y: 78 },
   chaisang: { id: 'chaisang', name: '柴桑', x: 68, y: 82 },
+  xinye: { id: 'xinye', name: '新野', x: 48, y: 72 },
+  jingzhou: { id: 'jingzhou', name: '荊州', x: 52, y: 74 },
+  chengdu: { id: 'chengdu', name: '成都', x: 22, y: 78 },
+  hanzhong: { id: 'hanzhong', name: '漢中', x: 32, y: 62 },
+  dingjun: { id: 'dingjun', name: '定軍山', x: 30, y: 66 },
 }
 
 export const FACTION_COLORS: Record<string, string> = {
@@ -40,6 +45,10 @@ export const FACTION_COLORS: Record<string, string> = {
   袁紹: '#8a6b3d',
   張繡: '#8a5a3d',
   孫權: '#2c6b4a',
+  孫堅: '#2c6b4a',
+  孫策: '#2c6b4a',
+  劉備: '#8b3a3a',
+  劉表: '#6b5a3a',
   聯軍: '#5a6a7a',
   未定: '#5a5348',
 }

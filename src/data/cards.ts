@@ -90,6 +90,10 @@ const SPECS: Spec[] = [
     ['heart', 4], ['heart', 7], ['heart', 10],
     ['diamond', 4], ['diamond', 5],
   ]),
+  ...spreadNature('sha', '雷殺', 'basic', 'ex', 'thunder', [
+    ['spade', 4], ['spade', 5], ['spade', 6], ['spade', 7], ['spade', 8],
+    ['club', 5], ['club', 6], ['club', 7], ['club', 8],
+  ]),
   ...spread('bingliang', '兵糧寸斷', 'trick', 'ex', [
     ['spade', 10], ['club', 4],
   ]),

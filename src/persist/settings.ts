@@ -1,3 +1,6 @@
+import type { PackId } from '../engine/types'
+import { ALL_PACK_IDS, normalizePacks } from '../data/packs'
+
 export interface AppSettings {
   /** Milliseconds of AI “thinking” between actions */
   thinkDelayMs: number
@@ -9,7 +12,7 @@ export interface AppSettings {
    * Card / general packs enabled for free play.
    * Standard is always included. Default: standard only.
    */
-  enabledPacks: Array<'standard' | 'ex'>
+  enabledPacks: PackId[]
   /** Optional OpenAI-compatible API token for LLM-controlled AI seats */
   aiApiToken: string
   /** API base URL (OpenAI-compatible), e.g. https://api.openai.com/v1 */
@@ -33,14 +36,12 @@ const DEFAULTS: AppSettings = {
   showAiDebug: false,
 }
 
-function normalizeEnabledPacks(raw: unknown): AppSettings['enabledPacks'] {
-  const allowed = new Set(['standard', 'ex'])
+function normalizeEnabledPacks(raw: unknown): PackId[] {
+  const allowed = new Set<string>(ALL_PACK_IDS)
   const list = Array.isArray(raw)
-    ? raw.filter((p): p is 'standard' | 'ex' => typeof p === 'string' && allowed.has(p))
+    ? raw.filter((p): p is PackId => typeof p === 'string' && allowed.has(p))
     : []
-  const set = new Set(list)
-  set.add('standard')
-  return (['standard', 'ex'] as const).filter((id) => set.has(id))
+  return normalizePacks(list.length ? list : ['standard'])
 }
 
 export function loadSettings(): AppSettings {
@@ -48,7 +49,6 @@ export function loadSettings(): AppSettings {
     const raw = localStorage.getItem(KEY)
     if (!raw) return { ...DEFAULTS, enabledPacks: [...DEFAULTS.enabledPacks] }
     const parsed = JSON.parse(raw) as Partial<AppSettings> & { useEx?: boolean }
-    // Migrate legacy free-play checkbox if packs not stored yet
     let packs = parsed.enabledPacks
     if (!packs && parsed.useEx === true) packs = ['standard', 'ex']
     return {
