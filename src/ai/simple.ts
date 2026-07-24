@@ -37,6 +37,17 @@ export async function runAiUntilHuman(
     if (state.players[again]?.isHuman) break
     stepAi(state, again)
     onTick?.()
+    // Hold so play card / damage FX stay visible before next action
+    if (delay > 0 && !state.winnerIds) {
+      const next = state.prompt.actorId
+      if (next !== null && !state.players[next]?.isHuman) {
+        await sleep(Math.min(delay, 900))
+        onTick?.()
+      } else if (state.fx.play || state.fx.damages.length) {
+        await sleep(Math.min(Math.max(delay, 600), 1000))
+        onTick?.()
+      }
+    }
   }
 }
 

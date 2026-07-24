@@ -6,6 +6,7 @@ import type {
   MatchConfig,
   PlayerState,
   PromptState,
+  Suit,
 } from './types'
 import {
   attackRangeOf,
@@ -23,8 +24,38 @@ import {
 } from './helpers'
 
 let uidSeq = 1
+let fxSeq = 1
 function nextUid(): string {
   return `c${uidSeq++}`
+}
+
+function nextFxSeq(): number {
+  return fxSeq++
+}
+
+function setPlayFx(
+  state: GameSnapshot,
+  opts: {
+    cardName: string
+    suit?: Suit
+    rank?: number
+    sourceId: number
+    targetIds: number[]
+    note?: string
+  },
+): void {
+  state.fx.play = {
+    ...opts,
+    seq: nextFxSeq(),
+  }
+  state.fx.damages = []
+}
+
+function pushDamageFx(state: GameSnapshot, playerId: number, amount: number): void {
+  state.fx.damages = [
+    ...state.fx.damages.filter((d) => d.playerId !== playerId),
+    { playerId, amount, seq: nextFxSeq() },
+  ]
 }
 
 export function createMatch(config: MatchConfig): GameSnapshot {
@@ -91,6 +122,7 @@ export function createMatch(config: MatchConfig): GameSnapshot {
     log: [],
     winnerIds: null,
     resultMessage: null,
+    fx: { play: null, damages: [] },
   }
 
   if (defer) {
@@ -343,6 +375,14 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
 
   if (def.type === 'equip') {
     playEquip(state, playerId, card)
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [playerId],
+      note: '裝備',
+    })
     setPlayPrompt(state)
     return
   }
@@ -352,6 +392,13 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
     removeHand(p, uid)
     discardCard(state, card)
     p.hp = Math.min(p.maxHp, p.hp + 1)
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [playerId],
+    })
     log(state, `${p.name} 使用【桃】，體力回覆至 ${p.hp}。`)
     setPlayPrompt(state)
     return
@@ -361,6 +408,13 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
     removeHand(p, uid)
     discardCard(state, card)
     draw(state, playerId, 2)
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [playerId],
+    })
     log(state, `${p.name} 使用【無中生有】，摸兩張牌。`)
     afterTrick(state, p)
     setPlayPrompt(state)
@@ -370,9 +424,17 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
   if (kind === 'taoyuan') {
     removeHand(p, uid)
     discardCard(state, card)
+    const healed = state.players.filter((pl) => pl.alive && pl.hp < pl.maxHp).map((pl) => pl.id)
     for (const pl of state.players) {
       if (pl.alive && pl.hp < pl.maxHp) pl.hp++
     }
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: healed.length ? healed : [playerId],
+    })
     log(state, `${p.name} 使用【桃園結義】。`)
     afterTrick(state, p)
     setPlayPrompt(state)
@@ -382,10 +444,16 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
   if (kind === 'nanman' || kind === 'wanjian') {
     removeHand(p, uid)
     discardCard(state, card)
+    const others = state.players.filter((t) => t.alive && t.id !== playerId)
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: others.map((t) => t.id),
+    })
     log(state, `${p.name} 使用【${def.name}】。`)
     afterTrick(state, p)
-    // Ask each other player to respond sha/shan sequentially via simplified auto for AI and prompt for human
-    const others = state.players.filter((t) => t.alive && t.id !== playerId)
     resolveAOE(state, playerId, others.map((t) => t.id), kind === 'nanman' ? 'sha' : 'shan', def.name)
     return
   }
@@ -445,12 +513,26 @@ export function selectTarget(state: GameSnapshot, playerId: number, targetId: nu
 
   if (kind === 'sha') {
     p.shaUsedThisTurn = true
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [targetId],
+    })
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【殺】。`)
     askShan(state, playerId, targetId, card.uid)
     return
   }
 
   if (kind === 'juedou') {
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [targetId],
+    })
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【決鬥】。`)
     afterTrick(state, p)
     resolveJuedou(state, playerId, targetId)
@@ -458,6 +540,13 @@ export function selectTarget(state: GameSnapshot, playerId: number, targetId: nu
   }
 
   if (kind === 'guohe') {
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [targetId],
+    })
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【過河拆橋】。`)
     afterTrick(state, p)
     dismantle(state, targetId)
@@ -466,6 +555,13 @@ export function selectTarget(state: GameSnapshot, playerId: number, targetId: nu
   }
 
   if (kind === 'shunshou') {
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [targetId],
+    })
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【順手牽羊】。`)
     afterTrick(state, p)
     steal(state, playerId, targetId)
@@ -474,6 +570,13 @@ export function selectTarget(state: GameSnapshot, playerId: number, targetId: nu
   }
 
   if (kind === 'huogong') {
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [targetId],
+    })
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【火攻】。`)
     afterTrick(state, p)
     dealDamage(state, targetId, 1, playerId)
@@ -481,6 +584,13 @@ export function selectTarget(state: GameSnapshot, playerId: number, targetId: nu
     return
   }
 
+  setPlayFx(state, {
+    cardName: def.name,
+    suit: def.suit,
+    rank: def.rank,
+    sourceId: playerId,
+    targetIds: [targetId],
+  })
   log(state, `${p.name} 使用【${def.name}】。`)
   setPlayPrompt(state)
 }
@@ -563,6 +673,15 @@ function handleResponse(state: GameSnapshot, playerId: number, uid: string): voi
   const kind = state.prompt.kind
 
   if (kind === 'respond_shan' && state.pending?.type === 'sha') {
+    const def = getCardDef(card.defId)
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [state.pending.sourceId],
+      note: '抵消',
+    })
     log(state, `${p.name} 打出【閃】，抵消了殺。`)
     // 張角雷擊簡化
     if (getGeneral(p.generalId).skills.includes('leiji')) {
@@ -579,6 +698,15 @@ function handleResponse(state: GameSnapshot, playerId: number, uid: string): voi
   }
 
   if (kind === 'respond_sha') {
+    const def = getCardDef(card.defId)
+    setPlayFx(state, {
+      cardName: def.name,
+      suit: def.suit,
+      rank: def.rank,
+      sourceId: playerId,
+      targetIds: [],
+      note: '響應',
+    })
     log(state, `${p.name} 打出【殺】。`)
     // used by nanman / juedou chain — simplified: success, continue
     state.pending = undefined
@@ -734,6 +862,7 @@ function dealDamage(state: GameSnapshot, targetId: number, amount: number, sourc
   const t = state.players[targetId]
   if (!t.alive) return
   t.hp -= amount
+  pushDamageFx(state, targetId, amount)
   log(state, `${t.name} 受到 ${amount} 點傷害（體力 ${Math.max(t.hp, 0)}）。`)
 
   // 奸雄 / 反饋 / 剛烈 simplified

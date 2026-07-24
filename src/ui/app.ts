@@ -21,7 +21,7 @@ import {
   selectTarget,
 } from '../engine/game'
 import { canReach, seatDistance } from '../engine/helpers'
-import type { GameSnapshot, GameMode, PlayerState } from '../engine/types'
+import type { GameSnapshot, GameMode, PlayerState, PlayFx } from '../engine/types'
 import { loadSettings, saveSettings, type AppSettings } from '../persist/settings'
 import { APP_VERSION } from '../version'
 
@@ -381,7 +381,7 @@ function renderTable(): string {
       <div class="deck-info">${picking ? `座位 ${n} 人` : `牌堆 ${g.deck.length}　棄牌 ${g.discard.length}`}</div>
     </header>
     ${thinking}
-    <div class="arena" style="--n:${n}">
+    <div class="arena" style="--n:${n}" id="arena">
       ${g.players
         .map((p) => {
           const hasGen = !!p.generalId
@@ -410,6 +410,7 @@ function renderTable(): string {
               ? 'in-range'
               : ''
           const idText = identityLabelVisible(p, human, g.config.mode)
+          const hurt = g.fx.damages.find((d) => d.playerId === p.id)
           const portrait =
             app.settings.showPortraits && gen
               ? `<img class="portrait" src="${portraitDataUri(gen.name, gen.kingdom, gen.gender)}" alt="" width="48" height="48" />`
@@ -419,8 +420,8 @@ function renderTable(): string {
           const infoBtn = hasGen
             ? `<button type="button" class="info-btn" data-info-seat="${p.id}" title="詳情" aria-label="詳情">ℹ</button>`
             : ''
-          return `<div class="seat-wrap" style="--angle:${angle}deg" data-visual="${visual}">
-            <div class="seat ${p.alive ? '' : 'dead'} ${active ? 'active' : ''} ${p.isHuman ? 'human' : ''} ${targetable ? 'targetable' : ''} ${reach} ${picking && !hasGen ? 'hidden-gen' : ''}" data-seat="${p.id}" role="${targetable ? 'button' : 'group'}" tabindex="${targetable ? '0' : '-1'}">
+          return `<div class="seat-wrap" style="--angle:${angle}deg" data-visual="${visual}" data-seat-pos="${p.id}">
+            <div class="seat ${p.alive ? '' : 'dead'} ${active ? 'active' : ''} ${p.isHuman ? 'human' : ''} ${targetable ? 'targetable' : ''} ${reach} ${picking && !hasGen ? 'hidden-gen' : ''} ${hurt ? 'hurt' : ''}" data-seat="${p.id}" role="${targetable ? 'button' : 'group'}" tabindex="${targetable ? '0' : '-1'}">
               ${portrait}
               <div class="seat-head">
                 <span class="seat-gen">${gen ? gen.name : '未亮將'}</span>
@@ -430,11 +431,16 @@ function renderTable(): string {
               <div class="hp">${hasGen ? hearts(p.hp, p.maxHp) : '—'}</div>
               <div class="equip">${hasGen ? equipText(p) : picking ? '等待選將' : '無裝備'}</div>
               <div class="meta-row"><span>手牌 ${picking ? '—' : p.hand.length}</span><span class="dist">距 ${distFromHuman}</span></div>
+              ${
+                hurt
+                  ? `<span class="dmg-float" data-dmg-seq="${hurt.seq}">-${hurt.amount}</span>`
+                  : ''
+              }
             </div>
           </div>`
         })
         .join('')}
-      <div class="arena-center" aria-hidden="true"><span>距離</span></div>
+      ${renderArenaFx(g, human.id, n)}
     </div>
     <div class="prompt-bar">${escapeHtml(prompt.message || '等待中…')}</div>
     ${picking ? renderGeneralPickPanel(g) : ''}
@@ -519,6 +525,101 @@ function renderGeneralPickPanel(g: GameSnapshot): string {
   </div>`
 }
 
+function seatPoint(playerId: number, humanId: number, n: number): { x: number; y: number } {
+  const visual = (playerId - humanId + n) % n
+  const deg = (visual / n) * 360 + 90
+  const rad = (deg * Math.PI) / 180
+  // Percent of arena box; matches CSS --radius ~38% of min side, center 50/50
+  const r = 38
+  return {
+    x: 50 + Math.cos(rad) * r,
+    y: 50 + Math.sin(rad) * r,
+  }
+}
+
+function resolvePlayFx(g: GameSnapshot, humanId: number): PlayFx | null {
+  if (g.fx.play) return g.fx.play
+  // While choosing a target, preview the card in hand
+  if (g.prompt.kind === 'choose_target' && g.prompt.cardUids?.[0] && g.prompt.actorId !== null) {
+    const actor = g.players[g.prompt.actorId]
+    const card = actor?.hand.find((c) => c.uid === g.prompt.cardUids![0])
+    if (card) {
+      const def = getCardDef(card.defId)
+      return {
+        cardName: def.name,
+        suit: def.suit,
+        rank: def.rank,
+        sourceId: g.prompt.actorId,
+        targetIds: [],
+        note: '選擇目標',
+        seq: 0,
+      }
+    }
+  }
+  void humanId
+  return null
+}
+
+function renderArenaFx(g: GameSnapshot, humanId: number, n: number): string {
+  const play = resolvePlayFx(g, humanId)
+  if (!play && !g.fx.damages.length) {
+    return `<div class="arena-center" aria-hidden="true"><span>距離</span></div>`
+  }
+
+  const src = play ? seatPoint(play.sourceId, humanId, n) : null
+  const arrows =
+    play && src
+      ? play.targetIds
+          .filter((tid) => tid !== play.sourceId)
+          .map((tid) => {
+            const dst = seatPoint(tid, humanId, n)
+            return arrowLine(src.x, src.y, dst.x, dst.y, play.seq)
+          })
+          .join('')
+      : ''
+
+  const selfTarget =
+    play && play.targetIds.length === 1 && play.targetIds[0] === play.sourceId
+      ? `<div class="fx-self-ring" style="left:${src!.x}%;top:${src!.y}%"></div>`
+      : ''
+
+  const red = play && (play.suit === 'heart' || play.suit === 'diamond')
+  const cardHtml = play
+    ? `<div class="fx-card ${red ? 'red' : 'black'}" data-fx-seq="${play.seq}">
+        <span class="csuit">${suitSymbol(play.suit)}${rankLabel(play.rank)}</span>
+        <span class="cname">${escapeHtml(play.cardName)}</span>
+        ${play.note ? `<span class="fx-note">${escapeHtml(play.note)}</span>` : ''}
+      </div>`
+    : ''
+
+  return `
+    <div class="arena-fx" aria-hidden="true">
+      <svg class="fx-arrows" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs>
+          <marker id="arrowHead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="#c4a35a" />
+          </marker>
+        </defs>
+        ${arrows}
+      </svg>
+      ${selfTarget}
+      <div class="fx-card-slot">${cardHtml || '<span class="arena-center-label">距離</span>'}</div>
+    </div>`
+}
+
+function arrowLine(x1: number, y1: number, x2: number, y2: number, seq: number): string {
+  // Shorten so arrow tips sit near seats, not under card center
+  const dx = x2 - x1
+  const dy = y2 - y1
+  const len = Math.hypot(dx, dy) || 1
+  const inset = Math.min(8, len * 0.2)
+  const sx = x1 + (dx / len) * inset
+  const sy = y1 + (dy / len) * inset
+  const ex = x2 - (dx / len) * inset
+  const ey = y2 - (dy / len) * inset
+  return `<line class="fx-arrow-line" data-fx-seq="${seq}" x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" marker-end="url(#arrowHead)" />`
+}
+
 function hearts(hp: number, max: number): string {
   const on = Math.max(0, hp)
   return '●'.repeat(on) + '○'.repeat(Math.max(0, max - on))
@@ -593,6 +694,14 @@ async function continueAi(): Promise<void> {
   const g = app.game
   if (!g || app.aiBusy) return
   if (g.matchPhase === 'pick_general') return
+  // Brief pause after human action so their card FX is visible
+  if (g.fx.play || g.fx.damages.length) {
+    app.aiBusy = true
+    render()
+    const hold = Math.min(Math.max(app.settings.thinkDelayMs, 500), 1000)
+    await new Promise((r) => setTimeout(r, hold))
+    app.aiBusy = false
+  }
   app.aiBusy = true
   render()
   try {

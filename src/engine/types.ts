@@ -111,6 +111,28 @@ export interface MatchConfig {
   offeredGenerals?: string[]
 }
 
+export interface PlayFx {
+  cardName: string
+  suit?: Suit
+  rank?: number
+  sourceId: number
+  targetIds: number[]
+  /** e.g. 響應 */
+  note?: string
+  seq: number
+}
+
+export interface DamageFx {
+  playerId: number
+  amount: number
+  seq: number
+}
+
+export interface TableFx {
+  play: PlayFx | null
+  damages: DamageFx[]
+}
+
 export interface GameSnapshot {
   config: MatchConfig
   players: PlayerState[]
@@ -124,6 +146,7 @@ export interface GameSnapshot {
   log: LogEntry[]
   winnerIds: number[] | null
   resultMessage: string | null
+  fx: TableFx
   /** Pending sha resolution */
   pending?: {
     type: 'sha'

@@ -359,6 +359,161 @@ input {
   letter-spacing: 0.12em;
 }
 
+.arena-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.fx-arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.fx-arrow-line {
+  stroke: #c4a35a;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  fill: none;
+  animation: arrowIn 0.35s ease-out both;
+}
+
+@keyframes arrowIn {
+  from {
+    stroke-dasharray: 40;
+    stroke-dashoffset: 40;
+    opacity: 0;
+  }
+  to {
+    stroke-dasharray: 40;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+.fx-card-slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+}
+
+.arena-center-label {
+  display: grid;
+  place-items: center;
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 50%;
+  border: 1px dashed rgba(196, 163, 90, 0.35);
+  font-size: 0.7rem;
+  color: rgba(232, 220, 196, 0.4);
+  letter-spacing: 0.12em;
+}
+
+.fx-card {
+  width: 5.4rem;
+  min-height: 6.8rem;
+  background: var(--card);
+  color: #2a1810;
+  border: 2px solid #c4a35a;
+  border-radius: 4px;
+  padding: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  animation: cardPop 0.35s ease-out both;
+}
+
+.fx-card.red .csuit {
+  color: #a01818;
+}
+
+.fx-note {
+  font-size: 0.7rem;
+  color: #6a4a28;
+  letter-spacing: 0.06em;
+}
+
+@keyframes cardPop {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.fx-self-ring {
+  position: absolute;
+  width: 4.5rem;
+  height: 4.5rem;
+  border: 2px solid rgba(196, 163, 90, 0.7);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: ringPulse 0.7s ease-out both;
+}
+
+@keyframes ringPulse {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  to {
+    opacity: 0.85;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.seat.hurt {
+  animation: hurtFlash 0.7s ease-out;
+}
+
+@keyframes hurtFlash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(180, 30, 30, 0.9);
+  }
+  35% {
+    background: #5c1212;
+    box-shadow: 0 0 18px 2px rgba(200, 40, 40, 0.75);
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+.dmg-float {
+  position: absolute;
+  left: 50%;
+  top: 0.2rem;
+  transform: translateX(-50%);
+  color: #ff6b6b;
+  font-weight: 700;
+  font-size: 1.25rem;
+  text-shadow: 0 1px 2px #000;
+  animation: dmgFloat 1s ease-out both;
+  pointer-events: none;
+  z-index: 8;
+}
+
+@keyframes dmgFloat {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -2.2rem) scale(1);
+  }
+}
+
 .seat-wrap {
   position: absolute;
   left: 50%;
@@ -381,6 +536,7 @@ input {
   padding: 0.45rem 0.5rem 0.5rem;
   border-radius: 4px;
   font: inherit;
+  overflow: visible;
 }
 
 .seat .portrait {
