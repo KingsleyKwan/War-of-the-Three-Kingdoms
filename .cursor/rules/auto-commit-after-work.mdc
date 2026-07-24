@@ -1,0 +1,14 @@
+---
+description: Always commit after completing a user-requested change
+alwaysApply: true
+---
+
+# Auto-commit after completed work
+
+When the user asks you to do something and you finish the implementation (code, build, docs, or other project changes):
+
+1. **Always create a git commit** for those changes in the same turn, without waiting to be asked again.
+2. Follow the existing git commit protocol (status, diff, log, stage relevant files, HEREDOC message, verify status).
+3. Do **not** push unless the user also asks to push (or says “commit and push”).
+4. Skip commit only if there are genuinely no changes, or the user explicitly said not to commit.
+5. Prefer concise commit messages focused on why; bump version when the project already versions releases.

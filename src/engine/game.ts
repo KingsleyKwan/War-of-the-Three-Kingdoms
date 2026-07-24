@@ -578,7 +578,15 @@ function legalTargets(state: GameSnapshot, playerId: number, kind: string): numb
     })
   }
   if (kind === 'guohe' || kind === 'shunshou' || kind === 'juedou' || kind === 'huogong') {
-    return state.players.filter((t) => t.alive && t.id !== playerId).map((t) => t.id)
+    return state.players
+      .filter((t) => {
+        if (!t.alive || t.id === playerId) return false
+        if (kind === 'guohe' || kind === 'shunshou') {
+          if (t.hand.length === 0 && equipSlots().every((s) => !t.equips[s])) return false
+        }
+        return true
+      })
+      .map((t) => t.id)
   }
   return []
 }
@@ -746,8 +754,7 @@ function finishTargetedCard(
     })
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【過河拆橋】。`)
     afterTrick(state, p)
-    dismantle(state, targetId)
-    setPlayPrompt(state)
+    askDismantle(state, playerId, targetId)
     return
   }
 
@@ -1271,6 +1278,12 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
   const key = state.prompt.choiceKey
   const targetId = state.prompt.targetIds?.[0]
 
+  if (key === 'guohe' && targetId !== undefined) {
+    applyDismantleChoice(state, playerId, targetId, choiceId)
+    setPlayPrompt(state)
+    return
+  }
+
   if (key === 'fangtian_confirm') {
     const uid = state.prompt.cardUids?.[0]
     const kind = state.prompt.respondKinds?.[0] ?? 'sha'
@@ -1661,25 +1674,86 @@ function resolveJuedou(state: GameSnapshot, a: number, b: number): void {
   if (!state.winnerIds) setPlayPrompt(state)
 }
 
-function dismantle(state: GameSnapshot, targetId: number): void {
+function askDismantle(state: GameSnapshot, sourceId: number, targetId: number): void {
   const t = state.players[targetId]
-  if (t.hand.length) {
-    const c = t.hand.splice(Math.floor(Math.random() * t.hand.length), 1)[0]
-    discardCard(state, c)
-    log(state, `${t.name} 被拆掉一張手牌。`)
-    return
+  const choices: { id: string; label: string }[] = []
+  for (const c of t.hand) {
+    const cdef = getCardDef(c.defId)
+    choices.push({
+      id: `hand:${c.uid}`,
+      label: `手牌・${cdef.name}${cdef.suit ? ` ${suitShort(cdef.suit)}${rankShort(cdef.rank)}` : ''}`,
+    })
   }
   for (const slot of equipSlots()) {
     const e = t.equips[slot]
     if (e) {
-      delete t.equips[slot]
-      discardCard(state, e)
-      log(state, `${t.name} 被拆掉【${getCardDef(e.defId).name}】。`)
-      if (getGeneral(t.generalId).skills.includes('xiaoji')) {
-        draw(state, targetId, 2)
-      }
-      return
+      choices.push({
+        id: `equip:${slot}`,
+        label: `裝備・${getCardDef(e.defId).name}`,
+      })
     }
+  }
+  if (!choices.length) {
+    log(state, `${t.name} 沒有可棄置的牌。`)
+    setPlayPrompt(state)
+    return
+  }
+  if (choices.length === 1) {
+    applyDismantleChoice(state, sourceId, targetId, choices[0].id)
+    setPlayPrompt(state)
+    return
+  }
+  state.prompt = {
+    kind: 'choice',
+    message: `【過河拆橋】選擇棄置 ${t.name} 的一張牌`,
+    actorId: sourceId,
+    choiceKey: 'guohe',
+    targetIds: [targetId],
+    choices,
+  }
+}
+
+function suitShort(suit: string): string {
+  return ({ spade: '♠', heart: '♥', club: '♣', diamond: '♦' } as Record<string, string>)[suit] ?? ''
+}
+
+function rankShort(rank: number | undefined): string {
+  if (rank === undefined) return ''
+  if (rank === 1) return 'A'
+  if (rank === 11) return 'J'
+  if (rank === 12) return 'Q'
+  if (rank === 13) return 'K'
+  return String(rank)
+}
+
+function applyDismantleChoice(
+  state: GameSnapshot,
+  sourceId: number,
+  targetId: number,
+  choiceId: string,
+): void {
+  const t = state.players[targetId]
+  const source = state.players[sourceId]
+  if (choiceId.startsWith('hand:')) {
+    const uid = choiceId.slice(5)
+    const idx = t.hand.findIndex((c) => c.uid === uid)
+    if (idx < 0) return
+    const c = t.hand.splice(idx, 1)[0]
+    discardCard(state, c)
+    log(state, `${source.name} 棄置了 ${t.name} 的【${getCardDef(c.defId).name}】。`)
+    if (getGeneral(t.generalId).skills.includes('lianying') && t.hand.length === 0) {
+      draw(state, targetId, 1)
+      log(state, `${t.name} 發動連營，摸一張牌。`)
+    }
+    return
+  }
+  if (choiceId.startsWith('equip:')) {
+    const slot = choiceId.slice(6) as EquipSlot
+    const e = t.equips[slot]
+    if (!e) return
+    const name = getCardDef(e.defId).name
+    leaveEquipArea(state, targetId, slot, e)
+    log(state, `${source.name} 棄置了 ${t.name} 的【${name}】。`)
   }
 }
 

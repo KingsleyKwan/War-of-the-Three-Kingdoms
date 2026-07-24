@@ -221,6 +221,13 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
     const hit = ids.find((id) => id !== 'skip')
     return hit ?? 'skip'
   }
+  if (key === 'guohe') {
+    // Prefer discarding equips (weapon first), else first hand card
+    const equip = ids.find((id) => id.startsWith('equip:weapon'))
+      ?? ids.find((id) => id.startsWith('equip:armor'))
+      ?? ids.find((id) => id.startsWith('equip:'))
+    return equip ?? ids.find((id) => id.startsWith('hand:')) ?? choices[0].id
+  }
   if (key === 'rende_target' || key === 'zhangba_target') {
     return ids[0] ?? null
   }
