@@ -1,14 +1,15 @@
 ---
-description: Always commit after completing a user-requested change
+description: Always commit and push after completing a user-requested change
 alwaysApply: true
 ---
 
-# Auto-commit after completed work
+# Auto-commit and push after completed work
 
-When the user asks you to do something and you finish the implementation (code, build, docs, or other project changes):
+When the user asks you to do something (fix, enhancement, or other project change) and you finish the implementation:
 
 1. **Always create a git commit** for those changes in the same turn, without waiting to be asked again.
 2. Follow the existing git commit protocol (status, diff, log, stage relevant files, HEREDOC message, verify status).
-3. Do **not** push unless the user also asks to push (or says “commit and push”).
-4. Skip commit only if there are genuinely no changes, or the user explicitly said not to commit.
+3. **Always push** to the tracked remote branch after a successful commit (`git push -u origin HEAD` when needed), so GitHub Pages stays up to date.
+4. Skip commit/push only if there are genuinely no changes, or the user explicitly said not to commit or not to push.
 5. Prefer concise commit messages focused on why; bump version when the project already versions releases.
+6. After push, briefly confirm the commit and that it was pushed (Pages may take a minute to refresh).
