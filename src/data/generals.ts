@@ -233,7 +233,8 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['leiji', 'guidao'],
-    skillText: '雷擊：使用閃後可令一名角色判定，黑色則受到2點雷電傷害。',
+    skillText:
+      '雷擊：使用閃後可令一名角色判定，黑色則受到2點雷電傷害。隊友不應攻擊張角；有手牌時敵人攻擊他需小心雷擊。',
   },
   {
     id: 'huaxiong',

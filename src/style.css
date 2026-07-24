@@ -903,6 +903,43 @@ input {
   margin: 0.35rem 0 0.15rem;
 }
 
+.settings-sep {
+  border: none;
+  border-top: 1px solid rgba(196, 163, 90, 0.25);
+  margin: 1rem 0 0.75rem;
+}
+
+.settings-sub {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  color: var(--gold);
+}
+
+.ai-debug {
+  margin: 0.4rem 0.75rem 0.2rem;
+  padding: 0.55rem 0.65rem;
+  max-height: 9rem;
+  overflow: auto;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  color: rgba(232, 220, 196, 0.75);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(196, 163, 90, 0.22);
+  border-radius: 2px;
+}
+
+.field input[type='text'],
+.field input[type='password'] {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(196, 163, 90, 0.35);
+  background: rgba(20, 14, 10, 0.85);
+  color: var(--paper);
+  border-radius: 2px;
+}
+
 .field input[type='range'] {
   width: 100%;
   accent-color: var(--lacquer);

@@ -14,6 +14,8 @@ import { cardKind } from '../engine/helpers'
 import type { GameSnapshot } from '../engine/types'
 import { getCardDef } from '../data/cards'
 import { loadSettings } from '../persist/settings'
+import { stepAiSmart } from './decide'
+import { scoreAttackTarget, setSeatThought } from './mind'
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -39,7 +41,7 @@ export async function runAiUntilHuman(
     const again = state.prompt.actorId
     if (again === null) break
     if (state.players[again]?.isHuman) break
-    stepAi(state, again)
+    await stepAiSmart(state, again)
     onTick?.()
     // Hold so play card / damage FX stay visible before next action
     if (delay > 0 && !state.winnerIds) {
@@ -49,7 +51,6 @@ export async function runAiUntilHuman(
         onTick?.()
       } else if (state.fx.play || state.fx.damages.length) {
         await sleep(Math.min(Math.max(delay, 600), 1000))
-        // Effect finished (back to human play) — remove played card
         if (state.prompt.kind === 'choose_card' || state.prompt.kind === 'discard') {
           clearPlayFx(state)
         }
@@ -59,11 +60,15 @@ export async function runAiUntilHuman(
   }
 }
 
-function stepAi(state: GameSnapshot, playerId: number): void {
+/** Heuristic AI (default when no API token). */
+export function stepAiSimple(state: GameSnapshot, playerId: number): void {
   const prompt = state.prompt
   if (prompt.kind === 'choice') {
     const id = pickChoice(state, playerId)
-    if (id) resolveChoice(state, playerId, id)
+    if (id) {
+      setSeatThought(state, playerId, `選擇：${id}`)
+      resolveChoice(state, playerId, id)
+    }
     return
   }
   if (prompt.kind === 'skill_cards') {
@@ -85,8 +90,13 @@ function stepAi(state: GameSnapshot, playerId: number): void {
   }
   if (prompt.kind === 'respond_shan' || prompt.kind === 'respond_sha') {
     const uids = prompt.cardUids ?? []
-    if (uids.length) selectCard(state, playerId, uids[0])
-    else passResponse(state, playerId)
+    if (uids.length) {
+      setSeatThought(state, playerId, prompt.kind === 'respond_shan' ? '打出閃' : '打出殺')
+      selectCard(state, playerId, uids[0])
+    } else {
+      setSeatThought(state, playerId, '無法響應，放棄')
+      passResponse(state, playerId)
+    }
     return
   }
 
@@ -102,7 +112,23 @@ function stepAi(state: GameSnapshot, playerId: number): void {
     const kind = prompt.respondKinds?.[0]
     let best = targets[0]
     if (kind === 'sha' || kind === 'juedou' || kind === 'huogong') {
-      best = targets.slice().sort((a, b) => state.players[a].hp - state.players[b].hp)[0]
+      best = targets
+        .slice()
+        .sort(
+          (a, b) =>
+            scoreAttackTarget(state, playerId, b) - scoreAttackTarget(state, playerId, a),
+        )[0]
+      const top = best !== undefined ? scoreAttackTarget(state, playerId, best) : -999
+      if (top < 0) {
+        // All believed allies / terrible — still must pick if forced; prefer least-bad
+        setSeatThought(state, playerId, '目標皆非理想（可能是隊友或張角雷擊），選傷害最低風險者')
+      } else {
+        setSeatThought(
+          state,
+          playerId,
+          `攻擊 ${state.players[best].name}（敵意評估 ${top}）`,
+        )
+      }
     }
     if (best !== undefined) selectTarget(state, playerId, best)
     return
@@ -134,6 +160,7 @@ function stepAi(state: GameSnapshot, playerId: number): void {
       .sort((a, b) => b.s - a.s)
 
     if (!scored.length || scored[0].s < 0) {
+      setSeatThought(state, playerId, '結束出牌')
       endPlayPhase(state, playerId)
       return
     }
@@ -144,10 +171,11 @@ function stepAi(state: GameSnapshot, playerId: number): void {
       opts.find((k) => k === 'sha') && scorePlay(state, playerId, card.uid, 'sha') >= scored[0].s
         ? 'sha'
         : opts[0]
+    setSeatThought(state, playerId, `打出 ${getCardDef(card.defId).name}`)
     selectCard(state, playerId, card.uid, prefer)
 
     if (state.prompt.kind === 'choose_target' && state.prompt.actorId === playerId) {
-      stepAi(state, playerId)
+      stepAiSimple(state, playerId)
     }
     return
   }
@@ -176,7 +204,9 @@ function scorePlay(state: GameSnapshot, playerId: number, uid: string, asKind?: 
   if (def.type === 'equip') return 20
   if (kind === 'tao' && p.hp < p.maxHp) return 18
   if (kind === 'wuzhong') return 16
-  if (kind === 'sha') return 14
+  if (kind === 'sha') {
+    return 14
+  }
   if (kind === 'juedou') return 12
   if (kind === 'guohe' || kind === 'shunshou') return 11
   if (kind === 'nanman' || kind === 'wanjian') return 10
@@ -218,25 +248,30 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
   if (key === 'fangtian_confirm') return 'confirm'
   if (key === 'liuli') return 'skip'
   if (key === 'leiji') {
-    const hit = ids.find((id) => id !== 'skip')
-    return hit ?? 'skip'
+    // Prefer thunder a believed hostile
+    const hostiles = ids.filter((id) => {
+      if (id === 'skip') return false
+      const tid = Number(id)
+      return scoreAttackTarget(state, playerId, tid) > 0
+    })
+    return hostiles[0] ?? 'skip'
   }
   if (key === 'guohe') {
-    const equip = ids.find((id) => id.startsWith('equip:weapon'))
-      ?? ids.find((id) => id.startsWith('equip:armor'))
-      ?? ids.find((id) => id.startsWith('equip:'))
+    const equip =
+      ids.find((id) => id.startsWith('equip:weapon')) ??
+      ids.find((id) => id.startsWith('equip:armor')) ??
+      ids.find((id) => id.startsWith('equip:'))
     return equip ?? ids.find((id) => id.startsWith('hand:')) ?? choices[0].id
   }
   if (key === 'zone_pick') {
     const selected = state.prompt.selectedCardUids ?? []
     const need = state.prompt.minTargets ?? 1
     if (selected.length >= need) return 'confirm'
-    const remaining = ids.filter(
-      (id) => id !== 'confirm' && !selected.includes(id),
-    )
-    const equip = remaining.find((id) => id.startsWith('equip:weapon'))
-      ?? remaining.find((id) => id.startsWith('equip:armor'))
-      ?? remaining.find((id) => id.startsWith('equip:'))
+    const remaining = ids.filter((id) => id !== 'confirm' && !selected.includes(id))
+    const equip =
+      remaining.find((id) => id.startsWith('equip:weapon')) ??
+      remaining.find((id) => id.startsWith('equip:armor')) ??
+      remaining.find((id) => id.startsWith('equip:'))
     return equip ?? remaining.find((id) => id.startsWith('hand:')) ?? remaining[0] ?? 'confirm'
   }
   if (key === 'ganglie') return ids.includes('discard') ? 'discard' : 'damage'

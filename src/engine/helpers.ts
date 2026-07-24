@@ -111,22 +111,20 @@ export function effectiveKind(player: PlayerState, card: CardInstance): string {
 }
 
 export function enemiesOf(state: GameSnapshot, playerId: number): number[] {
-  const me = state.players[playerId]
   if (state.config.mode === 'duel' || state.config.victory) {
     return state.players
       .filter((p) => p.alive && p.id !== playerId)
       .map((p) => p.id)
   }
-  // identity
-  return state.players
-    .filter((p) => {
-      if (!p.alive || p.id === playerId) return false
-      return !sameSide(me.identity, p.identity)
-    })
-    .map((p) => p.id)
+  // Identity: any other living seat can be targeted; AI uses beliefs to choose.
+  return state.players.filter((p) => p.alive && p.id !== playerId).map((p) => p.id)
 }
 
-function sameSide(a: PlayerState['identity'], b: PlayerState['identity']): boolean {
+/** True same-side check (victory / reveal). */
+export function trueSameSide(
+  a: PlayerState['identity'],
+  b: PlayerState['identity'],
+): boolean {
   if (a === 'spy' || b === 'spy') return false
   const lordSide = new Set(['lord', 'loyal'])
   if (lordSide.has(a) && lordSide.has(b)) return true

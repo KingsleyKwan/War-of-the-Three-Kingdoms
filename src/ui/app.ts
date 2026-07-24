@@ -1,4 +1,5 @@
 import { runAiUntilHuman } from '../ai/simple'
+import { formatMindDebug } from '../ai/mind'
 import { getCardDef } from '../data/cards'
 import {
   buildFreeMatch,
@@ -145,6 +146,7 @@ function bindStart(): void {
 
 function renderSettings(): string {
   const s = app.settings
+  const tokenSet = !!s.aiApiToken.trim()
   return `
   <div class="screen panel-screen">
     <header class="topbar">
@@ -165,6 +167,26 @@ function renderSettings(): string {
         <input type="checkbox" id="force-select" ${s.forceSelectGeneral ? 'checked' : ''} />
         <span>對局內可選全部武將（關閉則隨機三選一）</span>
       </label>
+      <hr class="settings-sep" />
+      <h3 class="settings-sub">進階 AI（選填）</h3>
+      <p class="hint">填入 OpenAI 相容 API Token 後，每位電腦座位會用大模型依「自己所知」決策；留空則使用內建規則 AI。</p>
+      <label class="field">
+        <span>AI API Token ${tokenSet ? '（已儲存）' : ''}</span>
+        <input type="password" id="ai-token" placeholder="sk-... 或供應商 Token" value="${escapeHtml(s.aiApiToken)}" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span>API Base URL</span>
+        <input type="text" id="ai-base" value="${escapeHtml(s.aiApiBaseUrl)}" placeholder="https://api.openai.com/v1" />
+      </label>
+      <label class="field">
+        <span>Model</span>
+        <input type="text" id="ai-model" value="${escapeHtml(s.aiModel)}" placeholder="gpt-4o-mini" />
+      </label>
+      <label class="field check">
+        <input type="checkbox" id="ai-debug" ${s.showAiDebug ? 'checked' : ''} />
+        <span>對局中顯示 AI 身份推測／想法（除錯）</span>
+      </label>
+      <p class="hint">瀏覽器直連 API 需供應商允許 CORS；若失敗會自動退回內建 AI。</p>
       <button type="button" class="btn primary" id="save-settings">儲存</button>
     </div>
   </div>`
@@ -185,6 +207,13 @@ function bindSettings(): void {
       thinkDelayMs: Number(range.value),
       showPortraits: (root().querySelector('#show-portraits') as HTMLInputElement).checked,
       forceSelectGeneral: (root().querySelector('#force-select') as HTMLInputElement).checked,
+      aiApiToken: (root().querySelector('#ai-token') as HTMLInputElement).value.trim(),
+      aiApiBaseUrl:
+        (root().querySelector('#ai-base') as HTMLInputElement).value.trim() ||
+        'https://api.openai.com/v1',
+      aiModel:
+        (root().querySelector('#ai-model') as HTMLInputElement).value.trim() || 'gpt-4o-mini',
+      showAiDebug: (root().querySelector('#ai-debug') as HTMLInputElement).checked,
     }
     saveSettings(app.settings)
     app.screen = 'start'
@@ -385,6 +414,11 @@ function renderTable(): string {
       <div class="deck-info">${picking ? `座位 ${n} 人` : `牌堆 ${g.deck.length}　棄牌 ${g.discard.length}`}</div>
     </header>
     ${thinking}
+    ${
+      app.settings.showAiDebug
+        ? `<pre class="ai-debug">${escapeHtml(formatMindDebug(g))}</pre>`
+        : ''
+    }
     <div class="arena" style="--n:${n}" id="arena">
       ${g.players
         .map((p) => {

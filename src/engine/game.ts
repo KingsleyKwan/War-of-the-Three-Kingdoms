@@ -34,6 +34,7 @@ import {
   targetHorses,
   weaponKind,
 } from './weapons'
+import { initAiMind, observePublicEvent } from '../ai/mind'
 
 let uidSeq = 1
 let fxSeq = 1
@@ -142,6 +143,7 @@ export function createMatch(config: MatchConfig): GameSnapshot {
     resultMessage: null,
     fx: { play: null, damages: [] },
   }
+  initAiMind(state)
 
   if (defer) {
     const offered = config.offeredGenerals ?? []
@@ -199,6 +201,7 @@ export function confirmGeneralPick(state: GameSnapshot, generalId: string): void
   }
 
   state.matchPhase = 'playing'
+  initAiMind(state)
   for (const pl of state.players) {
     draw(state, pl.id, 4)
   }
@@ -654,6 +657,9 @@ function finishTargetedCard(
       state,
       `${p.name} 對 ${targetIds.map((id) => state.players[id].name).join('、')} 使用【殺】。`,
     )
+    for (const tid of targetIds) {
+      observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId: tid, kind: 'sha' })
+    }
 
     const startShaVs = (tid: number, extras: number[]) => {
       const target = state.players[tid]
@@ -2143,6 +2149,7 @@ function trySave(state: GameSnapshot, targetId: number): void {
       log(state, `${t.name} 因失去裝備回覆體力，脫離瀕死（體力 ${t.hp}）。`)
     } else {
       t.alive = false
+      observePublicEvent(state, { type: 'death', playerId: targetId })
       log(state, `${t.name}（${getGeneral(t.generalId).name}）陣亡。`)
     }
   }

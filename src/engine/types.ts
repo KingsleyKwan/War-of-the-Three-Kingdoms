@@ -190,4 +190,12 @@ export interface GameSnapshot {
   }
   /** 火屬性標記（火攻等） */
   _damageNature?: 'normal' | 'fire' | 'thunder'
+  /** Per-seat AI identity beliefs / thoughts (debug + LLM) */
+  aiMind?: Record<
+    number,
+    {
+      beliefs: Record<number, { guess: string; note: string }>
+      thought: string
+    }
+  >
 }
