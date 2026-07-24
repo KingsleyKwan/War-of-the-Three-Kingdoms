@@ -771,9 +771,10 @@ function continueWuxieAsk(state: GameSnapshot): void {
       const trickName = w.trick.type === 'aoe_target' ? w.trick.name : '錦囊'
       about = `是否無懈【${trickName}】對 ${tn} 的效果？`
     }
+    // Do not put the asked seat's name in the message — spectators must not learn who holds 無懈.
     state.prompt = {
       kind: 'choice',
-      message: `【無懈可擊】${p.name}：${about}`,
+      message: `【無懈可擊】${about}`,
       actorId: seat,
       choiceKey: 'wuxie',
       cardUids: wuxieCards.map((c) => c.uid),

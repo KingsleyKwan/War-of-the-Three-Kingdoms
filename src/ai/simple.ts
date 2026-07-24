@@ -13,7 +13,7 @@ import {
 } from '../engine/game'
 import { listSkillActions } from '../engine/skills'
 import { cardKind, equipSlots } from '../engine/helpers'
-import type { GameSnapshot, PlayerState } from '../engine/types'
+import type { CardInstance, GameSnapshot, PlayerState } from '../engine/types'
 import { getCardDef } from '../data/cards'
 import { loadSettings } from '../persist/settings'
 import { stepAiSmart } from './decide'
@@ -88,7 +88,21 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
     const uids = [...(prompt.cardUids ?? [])]
     const selected = prompt.selectedCardUids ?? []
     if (selected.length < need && uids.length) {
-      const next = uids.find((u) => !selected.includes(u))
+      let next: string | undefined
+      if (prompt.skillId === 'luoyi') {
+        const picks = pickLuoyiDiscardUids(state, playerId, need)
+        next = picks.find((u) => !selected.includes(u) && uids.includes(u))
+      }
+      if (!next) {
+        // Prefer discarding low-value cards
+        const ranked = uids
+          .filter((u) => !selected.includes(u))
+          .sort(
+            (a, b) =>
+              scoreDiscard(state, playerId, a) - scoreDiscard(state, playerId, b),
+          )
+        next = ranked[0]
+      }
       if (next) {
         selectCard(state, playerId, next)
         if ((state.prompt.selectedCardUids?.length ?? 0) >= need) {
@@ -188,7 +202,7 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
       activateSkill(state, playerId, 'kurou')
       return
     }
-    if (skills.some((s) => s.id === 'luoyi') && p.hand.some((c) => cardKind(c) === 'sha')) {
+    if (skills.some((s) => s.id === 'luoyi') && shouldActivateLuoyi(state, playerId)) {
       activateSkill(state, playerId, 'luoyi')
       return
     }
@@ -317,11 +331,79 @@ function scoreDiscard(state: GameSnapshot, playerId: number, uid: string): numbe
   const card = p.hand.find((c) => c.uid === uid)
   if (!card) return 0
   const kind = cardKind(card)
-  if (kind === 'shan') return 1
-  if (kind === 'sha') return 3
-  if (kind === 'tao') return 10
-  if (getCardDef(card.defId).type === 'equip') return 8
-  return 2
+  const def = getCardDef(card.defId)
+  // Higher = keep (discard lowest first)
+  if (kind === 'tao') return 20
+  if (kind === 'wuxie') return 14
+  if (kind === 'shan') return 8
+  if (kind === 'sha') return 10
+  if (def.type === 'equip') {
+    // Spare gear is okay to discard if slot already filled
+    if (def.slot && p.equips[def.slot]) return 4
+    return 12
+  }
+  if (def.type === 'trick') return 6
+  return 3
+}
+
+/** 裸衣 only when we can still 殺 a foe after discarding 2 cards. */
+function shouldActivateLuoyi(state: GameSnapshot, playerId: number): boolean {
+  const p = state.players[playerId]
+  if (p.luoyiActive || p.hand.length < 3) return false
+  const shaCards = p.hand.filter((c) => cardKind(c) === 'sha')
+  if (!shaCards.length) return false
+  // Must keep ≥1 殺 after discarding 2
+  const nonSha = p.hand.filter((c) => cardKind(c) !== 'sha')
+  const spareSha = Math.max(0, shaCards.length - 1)
+  if (nonSha.length + spareSha < 2) return false
+  const foes = getLegalTargets(state, playerId, 'sha').filter(
+    (tid) => scoreAttackTarget(state, playerId, tid) > 0,
+  )
+  return foes.length > 0
+}
+
+function pickLuoyiDiscardUids(
+  state: GameSnapshot,
+  playerId: number,
+  need: number,
+): string[] {
+  const p = state.players[playerId]
+  const shaUids = p.hand.filter((c) => cardKind(c) === 'sha').map((c) => c.uid)
+  const keepSha = shaUids[0]
+  const ranked = p.hand
+    .filter((c) => c.uid !== keepSha)
+    .sort(
+      (a, b) =>
+        scoreDiscard(state, playerId, a.uid) - scoreDiscard(state, playerId, b.uid),
+    )
+  return ranked.slice(0, need).map((c) => c.uid)
+}
+
+function equipPlayScore(state: GameSnapshot, playerId: number, card: CardInstance): number {
+  const p = state.players[playerId]
+  const def = getCardDef(card.defId)
+  const slot = def.slot
+  if (!slot) return -1
+  const cur = p.equips[slot]
+  if (!cur) {
+    // Empty slot: useful, but below attacking / healing
+    return 11
+  }
+  // Already equipped — prefer holding spare (weapon/armor/horse) unless clear upgrade
+  const curDef = getCardDef(cur.defId)
+  if (slot === 'weapon') {
+    const curR = curDef.attackRange ?? 1
+    const newR = def.attackRange ?? 1
+    // 諸葛連弩 is a real upgrade when we want multi-kill; range+ only if +2 or more
+    if (def.kind === 'zhuge' && curDef.kind !== 'zhuge') return 9
+    if (newR >= curR + 2) return 7
+    return -4
+  }
+  // Armor / horse: don't swap same slot just to play a card
+  if (def.kind === curDef.kind) return -6
+  // Different armor: mild preference only for 仁王盾 over 八卦 if we often see black sha — keep simple
+  if (slot === 'armor' && def.kind === 'renwang' && curDef.kind === 'bagua') return 5
+  return -5
 }
 
 function scorePlay(state: GameSnapshot, playerId: number, uid: string, asKind?: string): number {
@@ -330,11 +412,15 @@ function scorePlay(state: GameSnapshot, playerId: number, uid: string, asKind?: 
   if (!card) return -1
   const def = getCardDef(card.defId)
   const kind = asKind ?? cardKind(card)
-  if (def.type === 'equip') return 20
+  if (def.type === 'equip') return equipPlayScore(state, playerId, card)
   if (kind === 'tao' && p.hp < p.maxHp) return 18
   if (kind === 'wuzhong') return 16
   if (kind === 'wugu') return 15
   if (kind === 'sha') {
+    const foes = getLegalTargets(state, playerId, 'sha').filter(
+      (tid) => scoreAttackTarget(state, playerId, tid) > 0,
+    )
+    if (!foes.length) return -2
     return 14
   }
   if (kind === 'juedou') return 12
@@ -362,6 +448,7 @@ function scorePlay(state: GameSnapshot, playerId: number, uid: string, asKind?: 
   if (kind === 'huogong') return 9
   if (kind === 'taoyuan') return 8
   if (kind === 'tiesuo') return 6
+  // Hold 閃 / 無懈 / spare gear — not playable as active usually
   return 1
 }
 

@@ -562,22 +562,40 @@ function renderTable(): string {
   const isHumanTurn =
     prompt.actorId === human.id && !app.aiBusy && !picking && !matchEnded && !app.matchPaused
   const n = g.players.length
-  const thinking =
+  const wuxieFog =
     !matchEnded &&
     !app.matchPaused &&
-    app.aiBusy &&
-    prompt.actorId !== null &&
-    !g.players[prompt.actorId]?.isHuman
-      ? `<div class="thinking">${seatRefHtml(g.players[prompt.actorId].name, prompt.actorId)} 思考中…</div>`
-      : app.matchPaused
-        ? `<div class="thinking paused-banner">對局已暫停</div>`
-        : ''
+    prompt.kind === 'choice' &&
+    prompt.choiceKey === 'wuxie' &&
+    prompt.actorId !== human.id
+  const thinking = (() => {
+    if (matchEnded || app.matchPaused) {
+      return app.matchPaused ? `<div class="thinking paused-banner">對局已暫停</div>` : ''
+    }
+    if (wuxieFog) {
+      return `<div class="thinking">有角色正在考慮是否使用【無懈可擊】…</div>`
+    }
+    if (app.aiBusy && prompt.actorId !== null && !g.players[prompt.actorId]?.isHuman) {
+      return `<div class="thinking">${seatRefHtml(g.players[prompt.actorId].name, prompt.actorId)} 思考中…</div>`
+    }
+    return ''
+  })()
 
   const namedSeats = g.players.map((p) => ({
     id: p.id,
     name: p.name,
     generalName: p.generalId ? getGeneral(p.generalId).name : undefined,
   }))
+
+  const promptBarText = (() => {
+    if (app.selectedUid && prompt.kind === 'choose_card') {
+      return '已選取手牌 — 再點一次同一張牌以打出，或點其他牌改選'
+    }
+    if (wuxieFog) {
+      return '等待【無懈可擊】結算…'
+    }
+    return prompt.message || '等待中…'
+  })()
 
   return `
   <div class="screen table-screen ${matchEnded ? 'match-ended' : ''} ${app.matchPaused ? 'match-paused' : ''}">
@@ -651,14 +669,13 @@ function renderTable(): string {
         .join('')}
       ${renderArenaFx(g, human.id, n)}
     </div>
-    <div class="prompt-bar">${colorizeSeatNamesInText(
-      app.selectedUid && prompt.kind === 'choose_card'
-        ? '已選取手牌 — 再點一次同一張牌以打出，或點其他牌改選'
-        : prompt.message || '等待中…',
-      namedSeats,
-    )}</div>
+    <div class="prompt-bar">${colorizeSeatNamesInText(promptBarText, namedSeats)}</div>
     ${picking ? renderGeneralPickPanel(g) : ''}
-    ${!picking && (prompt.kind === 'choice' || prompt.kind === 'skill_cards') ? renderChoicePanel(g) : ''}
+    ${
+      !picking && isHumanTurn && (prompt.kind === 'choice' || prompt.kind === 'skill_cards')
+        ? renderChoicePanel(g)
+        : ''
+    }
     ${
       !picking && isHumanTurn && prompt.kind === 'choose_card'
         ? `<div class="skill-row">${listSkillActions(g, human.id)
