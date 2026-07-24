@@ -490,7 +490,7 @@ function renderTable(): string {
             <button type="button" class="card ${selectable ? 'selectable' : ''} ${selected ? 'selected' : ''} ${red ? 'red' : 'black'}" data-uid="${c.uid}" ${selectable ? '' : 'disabled'}>
               <span class="csuit ${red ? 'red' : ''}">${suitSymbol(def.suit)}${rankLabel(def.rank)}</span>
               <span class="cname">${def.name}</span>
-              <span class="ctype">${typeName(def.type)}</span>
+              <span class="ctype">${cardSubLabel(def)}</span>
             </button>
             <button type="button" class="info-btn card-info" data-info-card="${c.uid}" title="牌面說明">ℹ</button>
           </div>`
@@ -723,6 +723,15 @@ function typeName(t: string): string {
   return ({ basic: '基本', trick: '錦囊', equip: '裝備' } as Record<string, string>)[t] ?? t
 }
 
+/** Hand-card footer: weapon range / horse +/-1 / type */
+function cardSubLabel(def: ReturnType<typeof getCardDef>): string {
+  if (def.slot === 'weapon') return `武器・攻${def.attackRange ?? 1}`
+  if (def.slot === 'armor') return '防具'
+  if (def.slot === 'horseMinus') return '-1坐騎'
+  if (def.slot === 'horsePlus') return '+1坐騎'
+  return typeName(def.type)
+}
+
 function seatDetailHtml(p: PlayerState): string {
   if (!p.generalId) {
     return `<h3>${escapeHtml(p.name)}</h3><p class="muted">尚未亮出武將。</p>`
@@ -763,7 +772,7 @@ function cardDetailHtml(uid: string, handOf: PlayerState): string {
   if (!card) return '<p>找不到此牌</p>'
   const def = getCardDef(card.defId)
   return `<h3>${def.name}</h3>
-    <p>${suitSymbol(def.suit)} ${suitName(def.suit)} ${rankLabel(def.rank)}　·　${typeName(def.type)}</p>
+    <p>${suitSymbol(def.suit)} ${suitName(def.suit)} ${rankLabel(def.rank)}　·　${cardSubLabel(def)}</p>
     <p>${CARD_HELP[def.kind] ?? '暫無說明。'}</p>`
 }
 
