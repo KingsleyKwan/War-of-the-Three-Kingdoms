@@ -122,6 +122,24 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
     )
     if (unused && p.hand.length) actions.push({ id: 'zhiba', label: '制霸', hint: '與一名角色拼點' })
   }
+  if (skills.includes('ganlu') && !p.ganluUsed) {
+    const wounded = p.maxHp - p.hp
+    const alive = state.players.filter((t) => t.alive)
+    const canSwap = alive.some((a, i) =>
+      alive.slice(i + 1).some((b) => {
+        const ac = Object.values(a.equips).filter(Boolean).length
+        const bc = Object.values(b.equips).filter(Boolean).length
+        return Math.abs(ac - bc) <= wounded
+      }),
+    )
+    if (canSwap) actions.push({ id: 'ganlu', label: '甘露', hint: '交換兩名角色的裝備區' })
+  }
+  if (skills.includes('xiansi') && (p.niCards?.length ?? 0) >= 2 && mayUseSha(p)) {
+    const canHit = state.players.some(
+      (t) => t.alive && t.id !== playerId && canReach(state, playerId, t.id),
+    )
+    if (canHit) actions.push({ id: 'xiansi', label: '陷嗣出殺', hint: '棄兩張「逆」，視為使用【殺】' })
+  }
   if (weaponKind(p) === 'zhangba' && p.hand.length >= 2 && mayUseSha(p)) {
     const canHit = state.players.some(
       (t) => t.alive && t.id !== playerId && canReach(state, playerId, t.id),

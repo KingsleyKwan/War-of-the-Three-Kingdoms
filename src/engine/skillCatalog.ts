@@ -482,6 +482,12 @@ export const SKILL_CATALOG: SkillSpec[] = [
     ['xinsheng', '新生', ['zuoci'], '受到傷害後', '重新隨機化身技能'],
     ['beige', '悲歌', ['caiwenji'], '殺造成傷害後', '棄牌判定並按花色處理'],
     ['duanchang', '斷腸', ['caiwenji'], '死亡時', '令殺手失去全部武將技能'],
+    ['enyuan', '恩怨', ['fazheng'], '受到傷害後', '傷害來源交一張手牌或失去1點體力'],
+    ['xuanhuo', '眩惑', ['fazheng'], '準備階段', '跳過摸牌令他人摸二，再獲得其至多兩張牌'],
+    ['pojun', '破軍', ['xusheng'], '殺造成傷害後', '目標摸當前體力值張牌並跳過下個出牌階段'],
+    ['ganlu', '甘露', ['wuguotai'], '出牌階段限一次', '交換兩名角色的裝備區'],
+    ['buyi', '補益', ['wuguotai'], '角色瀕死時', '展示非基本手牌並棄置，使其回復1點體力'],
+    ['xiansi', '陷嗣', ['liufeng'], '準備階段／成為殺目標／出牌階段', '累積逆牌並用兩張逆抵消或使用殺'],
   ] as const).map(([id, name, owners, trigger, behaviour]) => ({
     id,
     name,

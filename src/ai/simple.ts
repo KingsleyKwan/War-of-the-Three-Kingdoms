@@ -214,6 +214,14 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
       activateSkill(state, playerId, 'zhangba')
       return
     }
+    if (skills.some((s) => s.id === 'xiansi') && !p.hand.some((c) => cardKind(c) === 'sha')) {
+      activateSkill(state, playerId, 'xiansi')
+      return
+    }
+    if (skills.some((s) => s.id === 'ganlu') && p.hp < p.maxHp) {
+      activateSkill(state, playerId, 'ganlu')
+      return
+    }
 
     const cards = playableCards(state, playerId)
     const scored = cards
@@ -464,6 +472,39 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
 
   if (key === 'qilingong') {
     return ids.find((id) => id === 'horsePlus') ?? ids.find((id) => id === 'horseMinus') ?? 'skip'
+  }
+  if (key === 'enyuan') {
+    return ids.find((id) => id !== 'lose_hp') ?? 'lose_hp'
+  }
+  if (key === 'xuanhuo') {
+    const hasAlly = state.players.some(
+      (p) => p.alive && p.id !== playerId && !believedHostile(state, playerId, p.id),
+    )
+    return hasAlly && ids.includes('yes') ? 'yes' : 'no'
+  }
+  if (key === 'xuanhuo_target') {
+    return ids.find((id) => !believedHostile(state, playerId, Number(id))) ?? ids[0] ?? null
+  }
+  if (key === 'buyi') {
+    const targetId = state.prompt.targetIds?.[0]
+    return targetId !== undefined && !believedHostile(state, playerId, targetId) ? 'yes' : 'no'
+  }
+  if (key === 'ganlu_first' || key === 'ganlu_second') {
+    return ids
+      .map((id) => state.players[Number(id)])
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          Object.values(b.equips).filter(Boolean).length -
+          Object.values(a.equips).filter(Boolean).length,
+      )[0]?.id.toString() ?? ids[0] ?? null
+  }
+  if (key === 'xiansi_cancel') {
+    const sourceId = state.pending?.sourceId
+    return sourceId !== undefined && believedHostile(state, playerId, sourceId) ? 'yes' : 'no'
+  }
+  if (key === 'xiansi_target') {
+    return ids.find((id) => believedHostile(state, playerId, Number(id))) ?? ids[0] ?? null
   }
   if (key === 'hanbing') {
     const tid = state.prompt.targetIds?.[0] ?? state.pending?.targetId

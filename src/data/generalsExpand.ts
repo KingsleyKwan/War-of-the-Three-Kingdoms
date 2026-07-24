@@ -307,9 +307,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'shu',
     maxHp: 3,
     gender: 'male',
-    skills: [],
+    skills: ['enyuan', 'xuanhuo'],
     pack: 'yijiang',
-    skillText: '恩怨／眩惑（未完整）。',
+    skillText: '恩怨：受到傷害後，傷害來源須交給你一張手牌，否則失去1點體力。眩惑：準備階段可跳過摸牌，令另一角色摸兩張牌，然後你獲得其至多兩張牌。',
   },
   {
     id: 'xusheng',
@@ -317,9 +317,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wu',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['pojun'],
     pack: 'yijiang',
-    skillText: '破軍（未完整）。',
+    skillText: '破軍：你的【殺】造成傷害後，目標摸等同其當前體力值的牌（至多五張）並跳過下個出牌階段。',
   },
   {
     id: 'wuguotai',
@@ -327,9 +327,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wu',
     maxHp: 3,
     gender: 'female',
-    skills: [],
+    skills: ['ganlu', 'buyi'],
     pack: 'yijiang',
-    skillText: '甘露／補益（未完整）。',
+    skillText: '甘露：出牌階段限一次，交換兩名角色的裝備區。補益：角色瀕死時，可展示其一張手牌；若非基本牌，棄置之並令其回覆1點體力。',
   },
   {
     id: 'liufeng',
@@ -337,9 +337,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'shu',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['xiansi'],
     pack: 'yijiang',
-    skillText: '陷嗣（未完整）。',
+    skillText: '陷嗣：準備階段獲得至多兩名其他角色各一張牌作為「逆」；兩張「逆」可抵消對你的【殺】，或於出牌階段視為使用【殺】。',
   },
   // —— 故事敵將 ——
   {

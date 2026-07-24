@@ -106,6 +106,9 @@ export interface PlayerState {
   tianyiWin?: boolean
   tianyiLose?: boolean
   quhuUsed?: boolean
+  ganluUsed?: boolean
+  /** 逆牌（陷嗣） */
+  niCards?: CardInstance[]
   /** 技能被斷腸清空 */
   skillsDisabled?: boolean
   extraSkills?: string[]
