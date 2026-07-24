@@ -26,6 +26,15 @@ export const SKILL_CATALOG: SkillSpec[] = [
     logHints: ['奸雄'],
   },
   {
+    id: 'yaowu',
+    name: '耀武',
+    owners: ['huaxiong'],
+    trigger: '受到紅色【殺】傷害時',
+    behaviour: '傷害來源選擇：回覆1體力或摸一張牌',
+    status: 'ok',
+    logHints: ['耀武'],
+  },
+  {
     id: 'fankui',
     name: '反饋',
     owners: ['simayi'],

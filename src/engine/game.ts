@@ -2262,6 +2262,24 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
     return
   }
 
+  if (key === 'yaowu') {
+    const p = state.players[playerId]
+    if (choiceId === 'recover') {
+      if (p.hp < p.maxHp) {
+        p.hp += 1
+        log(state, `${p.name} 因【耀武】回覆1點體力（體力 ${p.hp}）。`)
+      } else {
+        draw(state, playerId, 1)
+        log(state, `${p.name} 體力已滿，因【耀武】改為摸一張牌。`)
+      }
+    } else {
+      draw(state, playerId, 1)
+      log(state, `${p.name} 因【耀武】摸一張牌。`)
+    }
+    resumeAfterDamageFlow(state)
+    return
+  }
+
   if (key === 'jiedao') {
     const ids = state.prompt.selectedTargetIds ?? []
     const sourceId = ids[0]
@@ -2698,7 +2716,8 @@ function isAwaitingZonePick(state: GameSnapshot): boolean {
     state.prompt.kind === 'choice' &&
     (state.prompt.choiceKey === 'zone_pick' ||
       state.prompt.choiceKey === 'ganglie' ||
-      state.prompt.choiceKey === 'jianxiong')
+      state.prompt.choiceKey === 'jianxiong' ||
+      state.prompt.choiceKey === 'yaowu')
   )
 }
 
@@ -2933,6 +2952,31 @@ function dealDamage(
         }
       }
     }
+  }
+
+  // 耀武：受到紅色【殺】傷害時，來源回1或摸1（華雄瀕死/陣亡仍觸發）
+  if (
+    amount > 0 &&
+    source &&
+    sourceId !== null &&
+    damageCard &&
+    t.generalId &&
+    getGeneral(t.generalId).skills.includes('yaowu') &&
+    cardKind(damageCard) === 'sha' &&
+    isRedCard(damageCard)
+  ) {
+    log(state, `${t.name} 的【耀武】發動。`)
+    state.prompt = {
+      kind: 'choice',
+      message: `【耀武】${source.name}：因擊中 ${t.name}，請選擇`,
+      actorId: sourceId,
+      choiceKey: 'yaowu',
+      choices: [
+        { id: 'recover', label: '回覆1點體力' },
+        { id: 'draw', label: '摸一張牌' },
+      ],
+    }
+    return true
   }
 
   checkVictory(state)

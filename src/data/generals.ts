@@ -269,9 +269,10 @@ export const GENERALS: GeneralDef[] = [
     kingdom: 'qun',
     maxHp: 6,
     gender: 'male',
-    skills: [],
+    skills: ['yaowu'],
     pack: 'standard',
-    skillText: '關卡敵將。',
+    skillText:
+      '耀武：鎖定技，當你受到紅色【殺】造成的傷害時，傷害來源選擇一項：回覆1點體力，或摸一張牌。',
   },
   {
     id: 'zhangxiu',

@@ -305,6 +305,11 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
   }
   if (key === 'ganglie') return ids.includes('discard') ? 'discard' : 'damage'
   if (key === 'jianxiong') return ids.includes('take') ? 'take' : 'skip'
+  if (key === 'yaowu') {
+    const p = state.players[playerId]
+    if (p.hp < p.maxHp && ids.includes('recover')) return 'recover'
+    return ids.includes('draw') ? 'draw' : ids[0] ?? null
+  }
   if (key === 'rende_target' || key === 'zhangba_target') {
     return ids[0] ?? null
   }
