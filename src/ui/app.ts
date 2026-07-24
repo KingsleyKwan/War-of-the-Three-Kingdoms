@@ -43,6 +43,8 @@ interface AppState {
   settings: AppSettings
   detailHtml: string | null
   aiBusy: boolean
+  /** Play FX seq that already ran its enter animation (avoid remount double-play) */
+  fxSettledSeq: number | null
 }
 
 const app: AppState = {
@@ -56,6 +58,7 @@ const app: AppState = {
   settings: loadSettings(),
   detailHtml: null,
   aiBusy: false,
+  fxSettledSeq: null,
 }
 
 const root = () => document.querySelector<HTMLDivElement>('#app')!
@@ -106,6 +109,14 @@ function render(): void {
       app.detailHtml = null
       render()
     })
+  }
+  const playSeq = app.game?.fx.play?.seq
+  if (playSeq !== undefined) {
+    requestAnimationFrame(() => {
+      if (app.game?.fx.play?.seq === playSeq) app.fxSettledSeq = playSeq
+    })
+  } else {
+    app.fxSettledSeq = null
   }
 }
 
@@ -667,6 +678,7 @@ function renderArenaFx(g: GameSnapshot, humanId: number, n: number): string {
     return `<div class="arena-center" aria-hidden="true"><span>距離</span></div>`
   }
 
+  const settled = !!(play && app.fxSettledSeq === play.seq)
   const src = play ? seatPoint(play.sourceId, humanId, n) : null
   const arrows =
     play && src
@@ -674,19 +686,19 @@ function renderArenaFx(g: GameSnapshot, humanId: number, n: number): string {
           .filter((tid) => tid !== play.sourceId)
           .map((tid) => {
             const dst = seatPoint(tid, humanId, n)
-            return arrowLine(src.x, src.y, dst.x, dst.y, play.seq)
+            return arrowLine(src.x, src.y, dst.x, dst.y, play.seq, settled)
           })
           .join('')
       : ''
 
   const selfTarget =
     play && play.targetIds.length === 1 && play.targetIds[0] === play.sourceId
-      ? `<div class="fx-self-ring" style="left:${src!.x}%;top:${src!.y}%"></div>`
+      ? `<div class="fx-self-ring ${settled ? 'fx-settled' : ''}" style="left:${src!.x}%;top:${src!.y}%"></div>`
       : ''
 
   const red = play && (play.suit === 'heart' || play.suit === 'diamond')
   const cardHtml = play
-    ? `<div class="fx-card ${red ? 'red' : 'black'}" data-fx-seq="${play.seq}">
+    ? `<div class="fx-card ${red ? 'red' : 'black'} ${settled ? 'fx-settled' : ''}" data-fx-seq="${play.seq}">
         <span class="csuit">${suitSymbol(play.suit)}${rankLabel(play.rank)}</span>
         <span class="cname">${escapeHtml(play.cardName)}</span>
         ${play.note ? `<span class="fx-note">${escapeHtml(play.note)}</span>` : ''}
@@ -708,7 +720,14 @@ function renderArenaFx(g: GameSnapshot, humanId: number, n: number): string {
     </div>`
 }
 
-function arrowLine(x1: number, y1: number, x2: number, y2: number, seq: number): string {
+function arrowLine(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  seq: number,
+  settled = false,
+): string {
   // Shorten so arrow tips sit near seats, not under card center
   const dx = x2 - x1
   const dy = y2 - y1
@@ -718,7 +737,7 @@ function arrowLine(x1: number, y1: number, x2: number, y2: number, seq: number):
   const sy = y1 + (dy / len) * inset
   const ex = x2 - (dx / len) * inset
   const ey = y2 - (dy / len) * inset
-  return `<line class="fx-arrow-line" data-fx-seq="${seq}" x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" marker-end="url(#arrowHead)" />`
+  return `<line class="fx-arrow-line ${settled ? 'fx-settled' : ''}" data-fx-seq="${seq}" x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" marker-end="url(#arrowHead)" />`
 }
 
 function hearts(hp: number, max: number): string {
@@ -746,6 +765,10 @@ function equipText(p: PlayerState): string {
   if (p.equips.horsePlus) {
     const def = getCardDef(p.equips.horsePlus.defId)
     lines.push(`<span class="eq-line eq-horse">+1 ${escapeHtml(def.name)}</span>`)
+  }
+  for (const j of p.judges ?? []) {
+    const def = getCardDef(j.defId)
+    lines.push(`<span class="eq-line eq-judge">判定・${escapeHtml(def.name)}</span>`)
   }
   return lines.length ? lines.join('') : '無裝備'
 }

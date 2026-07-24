@@ -48,6 +48,8 @@ export interface PlayerState {
   maxHp: number
   hand: CardInstance[]
   equips: Partial<Record<EquipSlot, CardInstance>>
+  /** 判定區（樂／兵糧／閃電等），對所有人可見 */
+  judges: CardInstance[]
   alive: boolean
   shaUsedThisTurn: boolean
   /** 裸衣：本回合殺傷害+1且不能用錦囊 */

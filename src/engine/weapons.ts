@@ -29,6 +29,7 @@ export function countDiscardable(p: PlayerState): number {
   for (const slot of ['weapon', 'armor', 'horseMinus', 'horsePlus'] as const) {
     if (p.equips[slot]) n++
   }
+  n += p.judges?.length ?? 0
   return n
 }
 

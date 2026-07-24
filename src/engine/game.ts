@@ -95,6 +95,7 @@ export function createMatch(config: MatchConfig): GameSnapshot {
         maxHp: 0,
         hand: [],
         equips: {},
+        judges: [],
         alive: true,
         shaUsedThisTurn: false,
       }
@@ -110,6 +111,7 @@ export function createMatch(config: MatchConfig): GameSnapshot {
       maxHp: g.maxHp,
       hand: [],
       equips: {},
+      judges: [],
       alive: true,
       shaUsedThisTurn: false,
     }
@@ -585,7 +587,10 @@ function legalTargets(state: GameSnapshot, playerId: number, kind: string): numb
       .filter((t) => {
         if (!t.alive || t.id === playerId) return false
         if (kind === 'guohe' || kind === 'shunshou') {
-          if (t.hand.length === 0 && equipSlots().every((s) => !t.equips[s])) return false
+          const hasJudge = (t.judges?.length ?? 0) > 0
+          if (t.hand.length === 0 && equipSlots().every((s) => !t.equips[s]) && !hasJudge) {
+            return false
+          }
         }
         return true
       })
@@ -1689,17 +1694,26 @@ function resolveJuedou(state: GameSnapshot, a: number, b: number): void {
 
 function listZoneOptions(
   p: PlayerState,
-  handOnly = false,
+  opts: { handOnly?: boolean; revealHand: boolean },
 ): { id: string; label: string }[] {
   const choices: { id: string; label: string }[] = []
+  let hiddenIndex = 0
   for (const c of p.hand) {
-    const cdef = getCardDef(c.defId)
-    choices.push({
-      id: `hand:${c.uid}`,
-      label: `手牌・${cdef.name}${cdef.suit ? ` ${suitShort(cdef.suit)}${rankShort(cdef.rank)}` : ''}`,
-    })
+    hiddenIndex++
+    if (opts.revealHand) {
+      const cdef = getCardDef(c.defId)
+      choices.push({
+        id: `hand:${c.uid}`,
+        label: `手牌・${cdef.name}${cdef.suit ? ` ${suitShort(cdef.suit)}${rankShort(cdef.rank)}` : ''}`,
+      })
+    } else {
+      choices.push({
+        id: `hand:${c.uid}`,
+        label: `手牌（暗・${hiddenIndex}）`,
+      })
+    }
   }
-  if (!handOnly) {
+  if (!opts.handOnly) {
     for (const slot of equipSlots()) {
       const e = p.equips[slot]
       if (e) {
@@ -1708,6 +1722,13 @@ function listZoneOptions(
           label: `裝備・${getCardDef(e.defId).name}`,
         })
       }
+    }
+    for (const j of p.judges ?? []) {
+      const jdef = getCardDef(j.defId)
+      choices.push({
+        id: `judge:${j.uid}`,
+        label: `判定・${jdef.name}`,
+      })
     }
   }
   return choices
@@ -1726,7 +1747,11 @@ function beginZonePick(
   },
 ): void {
   const owner = state.players[opts.ownerId]
-  const options = listZoneOptions(owner, opts.handOnly)
+  const revealHand = opts.actorId === opts.ownerId
+  const options = listZoneOptions(owner, {
+    handOnly: opts.handOnly,
+    revealHand,
+  })
   const count = Math.min(opts.count, options.length)
   if (count <= 0) {
     finishZonePickSkill(state, opts.skillId, [])
@@ -1737,7 +1762,6 @@ function beginZonePick(
     finishZonePickSkill(state, opts.skillId, [options[0].id])
     return
   }
-  // Auto-select when exactly `count` cards and no choice needed? Still show for clarity when count>1
   state.prompt = {
     kind: 'choice',
     message: opts.message,
@@ -1783,7 +1807,8 @@ function handleZonePickClick(state: GameSnapshot, playerId: number, choiceId: st
 
   const owner = state.players[ownerId]
   const handOnly = skillId === 'cixiong'
-  const options = listZoneOptions(owner, handOnly)
+  const revealHand = playerId === ownerId
+  const options = listZoneOptions(owner, { handOnly, revealHand })
   let selected = [...(state.prompt.selectedCardUids ?? [])]
 
   if (choiceId === 'confirm') {
@@ -1871,6 +1896,22 @@ function applyZoneCardIds(
         leaveEquipArea(state, ownerId, slot, e)
         if (actorId === ownerId) log(state, `${owner.name} 棄置了【${name}】。`)
         else log(state, `${actor.name} 棄置了 ${owner.name} 的【${name}】。`)
+      }
+      continue
+    }
+    if (id.startsWith('judge:')) {
+      const uid = id.slice(6)
+      if (!owner.judges) owner.judges = []
+      const idx = owner.judges.findIndex((c) => c.uid === uid)
+      if (idx < 0) continue
+      const c = owner.judges.splice(idx, 1)[0]
+      const name = getCardDef(c.defId).name
+      if (mode === 'steal') {
+        actor.hand.push(c)
+        log(state, `${actor.name} 獲得了 ${owner.name} 判定區的【${name}】。`)
+      } else {
+        discardCard(state, c)
+        log(state, `${actor.name} 棄置了 ${owner.name} 判定區的【${name}】。`)
       }
     }
   }
@@ -2144,6 +2185,10 @@ function trySave(state: GameSnapshot, targetId: number): void {
     for (const slot of equipSlots()) {
       const e = t.equips[slot]
       if (e) leaveEquipArea(state, targetId, slot, e)
+    }
+    if (t.judges?.length) {
+      for (const j of t.judges) discardCard(state, j)
+      t.judges = []
     }
     if (t.hp > 0) {
       log(state, `${t.name} 因失去裝備回覆體力，脫離瀕死（體力 ${t.hp}）。`)

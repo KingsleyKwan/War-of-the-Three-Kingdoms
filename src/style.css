@@ -447,6 +447,12 @@ input {
   animation: cardPop 0.35s ease-out both;
 }
 
+.fx-card.fx-settled,
+.fx-self-ring.fx-settled,
+.fx-arrow-line.fx-settled {
+  animation: none !important;
+}
+
 .fx-card.red .csuit {
   color: #a01818;
 }
@@ -774,6 +780,10 @@ input {
 
 .equip .eq-horse {
   color: rgba(160, 190, 150, 0.85);
+}
+
+.equip .eq-judge {
+  color: rgba(180, 140, 200, 0.9);
 }
 
 .meta-row {
