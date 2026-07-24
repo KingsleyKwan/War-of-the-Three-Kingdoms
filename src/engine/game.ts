@@ -638,15 +638,15 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
     log(state, `${p.name} 使用【${def.name}】。`)
     afterTrick(state, p)
     observePublicEvent(state, { type: 'aoe', sourceId: playerId, kind })
-    beginWuxieWindow(state, {
-      type: 'aoe',
-      sourceId: playerId,
-      kind,
-      name: def.name,
-      targets: others.map((t) => t.id),
-      need: kind === 'nanman' ? 'sha' : 'shan',
+    // Per-target 無懈 (like 五穀豐登), not whole-card cancel
+    resolveAOE(
+      state,
+      playerId,
+      others.map((t) => t.id),
+      kind === 'nanman' ? 'sha' : 'shan',
+      def.name,
       card,
-    })
+    )
     return
   }
 
@@ -702,13 +702,13 @@ type PendingTrick =
   | { type: 'wugu'; sourceId: number }
   | { type: 'wugu_pick'; sourceId: number; pickerId: number }
   | {
-      type: 'aoe'
+      type: 'aoe_target'
       sourceId: number
+      targetId: number
       kind: string
       name: string
-      targets: number[]
       need: 'sha' | 'shan'
-      card: CardInstance
+      card?: CardInstance
     }
   | { type: 'guohe'; sourceId: number; targetId: number }
   | { type: 'shunshou'; sourceId: number; targetId: number }
@@ -754,6 +754,7 @@ function continueWuxieAsk(state: GameSnapshot): void {
   if (!w) return
   const n = state.players.length
   const pickerId = w.trick.type === 'wugu_pick' ? w.trick.pickerId : undefined
+  const aoeTargetId = w.trick.type === 'aoe_target' ? w.trick.targetId : undefined
   while (w.asked < n) {
     const seat = w.cursor
     w.cursor = (w.cursor + 1) % n
@@ -762,10 +763,14 @@ function continueWuxieAsk(state: GameSnapshot): void {
     if (!p.alive) continue
     const wuxieCards = p.hand.filter((c) => cardKind(c) === 'wuxie')
     if (!wuxieCards.length) continue
-    const about =
-      pickerId !== undefined
-        ? `是否無懈【五穀豐登】中 ${state.players[pickerId]?.name ?? ''} 的選牌？`
-        : `是否無懈當前錦囊？`
+    let about = `是否無懈當前錦囊？`
+    if (pickerId !== undefined) {
+      about = `是否無懈【五穀豐登】中 ${state.players[pickerId]?.name ?? ''} 的選牌？`
+    } else if (aoeTargetId !== undefined) {
+      const tn = state.players[aoeTargetId]?.name ?? ''
+      const trickName = w.trick.type === 'aoe_target' ? w.trick.name : '錦囊'
+      about = `是否無懈【${trickName}】對 ${tn} 的效果？`
+    }
     state.prompt = {
       kind: 'choice',
       message: `【無懈可擊】${p.name}：${about}`,
@@ -794,6 +799,16 @@ function continueWuxieAsk(state: GameSnapshot): void {
       } else {
         setPlayPrompt(state)
       }
+      return
+    }
+    if (trick.type === 'aoe_target') {
+      const tgt = state.players[trick.targetId]
+      log(state, `【${trick.name}】對 ${tgt?.name ?? ''} 的效果被【無懈可擊】抵消。`)
+      const queue = getAoeQueue(state)
+      if (queue && queue.targets[0] === trick.targetId) {
+        queue.targets.shift()
+      }
+      continueAoe(state)
       return
     }
     log(state, `錦囊效果被【無懈可擊】抵消。`)
@@ -840,8 +855,12 @@ function resolvePendingTrick(state: GameSnapshot, trick: PendingTrick): void {
     askWuguPickUi(state, trick.pickerId)
     return
   }
-  if (trick.type === 'aoe') {
-    resolveAOE(state, trick.sourceId, trick.targets, trick.need, trick.name, trick.card)
+  if (trick.type === 'aoe_target') {
+    const queue = getAoeQueue(state)
+    if (queue && queue.targets[0] === trick.targetId) {
+      queue.targets.shift()
+    }
+    askAOEResponse(state, trick.sourceId, trick.targetId, trick.need, trick.name)
     return
   }
   if (trick.type === 'guohe') {
@@ -2205,7 +2224,7 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
           const lord = state.players.find((x) => x.identity === 'lord')
           const trick = w.trick
           const protectsLord =
-            (trick.type === 'aoe' && lord && trick.targets.includes(lord.id)) ||
+            (trick.type === 'aoe_target' && lord && trick.targetId === lord.id) ||
             (trick.type === 'juedou' && lord && trick.targetId === lord.id) ||
             (trick.type === 'guohe' && lord && trick.targetId === lord.id) ||
             (trick.type === 'huogong' && lord && trick.targetId === lord.id) ||
@@ -2342,13 +2361,9 @@ function resumeAfterResponse(state: GameSnapshot): void {
   checkVictory(state)
   if (state.winnerIds) return
   const queue = getAoeQueue(state)
-  if (queue && queue.targets.length) {
-    const next = queue.targets.shift()!
-    askAOEResponse(state, queue.sourceId, next, queue.need, queue.name)
-    return
-  }
   if (queue) {
-    clearAoeQueue(state)
+    continueAoe(state)
+    return
   }
   if (state.phase === 'play') setPlayPrompt(state)
 }
@@ -2358,6 +2373,7 @@ type AoeQueue = {
   targets: number[]
   need: 'sha' | 'shan'
   name: string
+  kind: string
   card?: CardInstance
 }
 
@@ -2369,6 +2385,30 @@ function clearAoeQueue(state: GameSnapshot): void {
   delete (state as GameSnapshot & { _aoe?: AoeQueue })._aoe
 }
 
+/** Before each AOE target: offer 無懈 against that seat only. */
+function continueAoe(state: GameSnapshot): void {
+  const queue = getAoeQueue(state)
+  if (!queue) {
+    if (state.phase === 'play') setPlayPrompt(state)
+    return
+  }
+  if (!queue.targets.length) {
+    clearAoeQueue(state)
+    if (state.phase === 'play') setPlayPrompt(state)
+    return
+  }
+  const next = queue.targets[0]
+  beginWuxieWindow(state, {
+    type: 'aoe_target',
+    sourceId: queue.sourceId,
+    targetId: next,
+    kind: queue.kind,
+    name: queue.name,
+    need: queue.need,
+    card: queue.card,
+  })
+}
+
 function resolveAOE(
   state: GameSnapshot,
   sourceId: number,
@@ -2377,14 +2417,16 @@ function resolveAOE(
   name: string,
   card?: CardInstance,
 ): void {
+  const kind = need === 'sha' ? 'nanman' : 'wanjian'
   ;(state as GameSnapshot & { _aoe?: AoeQueue })._aoe = {
     sourceId,
     targets: [...targets],
     need,
     name,
+    kind,
     card,
   }
-  resumeAfterResponse(state)
+  continueAoe(state)
 }
 
 function askAOEResponse(

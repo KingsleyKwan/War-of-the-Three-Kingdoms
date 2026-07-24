@@ -2,6 +2,7 @@ import {
   activateSkill,
   cancelTarget,
   endPlayPhase,
+  getLegalTargets,
   getPlayKindOptions,
   passResponse,
   playableCards,
@@ -11,8 +12,8 @@ import {
   clearPlayFx,
 } from '../engine/game'
 import { listSkillActions } from '../engine/skills'
-import { cardKind } from '../engine/helpers'
-import type { GameSnapshot } from '../engine/types'
+import { cardKind, equipSlots } from '../engine/helpers'
+import type { GameSnapshot, PlayerState } from '../engine/types'
 import { getCardDef } from '../data/cards'
 import { loadSettings } from '../persist/settings'
 import { stepAiSmart } from './decide'
@@ -136,7 +137,6 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
         )[0]
       const top = best !== undefined ? scoreAttackTarget(state, playerId, best) : -999
       if (top < 0) {
-        // All believed allies / terrible — still must pick if forced; prefer least-bad
         setSeatThought(state, playerId, '目標皆非理想（可能是隊友或張角雷擊），選傷害最低風險者')
       } else {
         setSeatThought(
@@ -145,6 +145,33 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
           `攻擊 ${state.players[best].name}（敵意評估 ${top}）`,
         )
       }
+    } else if (
+      kind === 'guohe' ||
+      kind === 'shunshou' ||
+      kind === 'lebu' ||
+      kind === 'bingliang'
+    ) {
+      const mode =
+        kind === 'guohe' ? 'discard' : kind === 'shunshou' ? 'steal' : 'delay'
+      best = targets
+        .slice()
+        .sort(
+          (a, b) =>
+            scoreTrickTarget(state, playerId, b, mode) -
+            scoreTrickTarget(state, playerId, a, mode),
+        )[0]
+      const top = best !== undefined ? scoreTrickTarget(state, playerId, best, mode) : -999
+      if (top < 0) {
+        setSeatThought(state, playerId, '無合適拆牌／延時目標（避免傷隊友），取消')
+        cancelTarget(state, playerId)
+        endPlayPhase(state, playerId)
+        return
+      }
+      setSeatThought(
+        state,
+        playerId,
+        `指定 ${state.players[best].name}（${mode === 'discard' ? '拆牌' : mode === 'steal' ? '偷牌' : '延時'} ${top}）`,
+      )
     }
     if (best !== undefined) selectTarget(state, playerId, best)
     return
@@ -207,6 +234,84 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
   endPlayPhase(state, playerId)
 }
 
+function hasEquip(p: PlayerState): boolean {
+  return equipSlots().some((s) => !!p.equips[s])
+}
+
+function hasJudgeLock(p: PlayerState): boolean {
+  return (p.judges ?? []).some((j) => {
+    const k = getCardDef(j.defId).kind
+    return k === 'lebu' || k === 'bingliang'
+  })
+}
+
+/** Pick which zone card to discard/steal: allies → locks; enemies → equip/hand (not locks). */
+function pickZoneCard(
+  state: GameSnapshot,
+  actorId: number,
+  ids: string[],
+): string | null {
+  const ownerId = state.prompt.pickOwnerId ?? state.prompt.targetIds?.[0]
+  const hostile =
+    ownerId === undefined ? true : believedHostile(state, actorId, ownerId)
+
+  if (!hostile) {
+    return (
+      ids.find((id) => id.startsWith('judge:')) ??
+      null
+    )
+  }
+
+  const nonJudge = ids.filter((id) => !id.startsWith('judge:'))
+  const pool = nonJudge.length ? nonJudge : ids
+  return (
+    pool.find((id) => id.startsWith('equip:weapon')) ??
+    pool.find((id) => id.startsWith('equip:armor')) ??
+    pool.find((id) => id.startsWith('equip:')) ??
+    pool.find((id) => id.startsWith('hand:')) ??
+    pool[0] ??
+    null
+  )
+}
+
+/**
+ * Score 過河/順手/樂/兵 targets:
+ * - Enemies: dismantle hand/equip (not their locks)
+ * - Allies: only good for discarding their 樂/兵
+ */
+function scoreTrickTarget(
+  state: GameSnapshot,
+  actorId: number,
+  targetId: number,
+  mode: 'discard' | 'steal' | 'delay',
+): number {
+  const t = state.players[targetId]
+  if (!t?.alive) return -999
+  const hostile = believedHostile(state, actorId, targetId)
+  const lock = hasJudgeLock(t)
+  const stuff = t.hand.length > 0 || hasEquip(t)
+
+  if (mode === 'delay') {
+    if (!hostile) return -200
+    return 25 + (4 - t.hp) * 2
+  }
+
+  if (!hostile) {
+    // Help ally by removing 樂不思蜀 / 兵糧
+    if (mode === 'discard' && lock) return 55
+    return -200
+  }
+
+  // Enemy: do not remove their locks (that helps them)
+  if (!stuff && lock) return -40
+  let score = 20 + t.hand.length * 3
+  if (t.equips.weapon) score += 10
+  if (t.equips.armor) score += 12
+  if (t.equips.horseMinus || t.equips.horsePlus) score += 6
+  if (mode === 'steal') score += 2
+  return score
+}
+
 function scoreDiscard(state: GameSnapshot, playerId: number, uid: string): number {
   const p = state.players[playerId]
   const card = p.hand.find((c) => c.uid === uid)
@@ -233,10 +338,27 @@ function scorePlay(state: GameSnapshot, playerId: number, uid: string, asKind?: 
     return 14
   }
   if (kind === 'juedou') return 12
-  if (kind === 'guohe' || kind === 'shunshou') return 11
+  if (kind === 'guohe' || kind === 'shunshou') {
+    const mode = kind === 'guohe' ? 'discard' : 'steal'
+    const targets = getLegalTargets(state, playerId, kind)
+    const best = Math.max(
+      -999,
+      ...targets.map((tid) => scoreTrickTarget(state, playerId, tid, mode)),
+    )
+    if (best < 0) return -5
+    return 11 + Math.min(8, Math.floor(best / 10))
+  }
   if (kind === 'nanman' || kind === 'wanjian') return 10
   if (kind === 'jiedao') return 10
-  if (kind === 'lebu' || kind === 'bingliang') return 9
+  if (kind === 'lebu' || kind === 'bingliang') {
+    const targets = getLegalTargets(state, playerId, kind)
+    const best = Math.max(
+      -999,
+      ...targets.map((tid) => scoreTrickTarget(state, playerId, tid, 'delay')),
+    )
+    if (best < 0) return -5
+    return 9
+  }
   if (kind === 'huogong') return 9
   if (kind === 'taoyuan') return 8
   if (kind === 'tiesuo') return 6
@@ -285,11 +407,7 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
     return hostiles[0] ?? 'skip'
   }
   if (key === 'guohe') {
-    const equip =
-      ids.find((id) => id.startsWith('equip:weapon')) ??
-      ids.find((id) => id.startsWith('equip:armor')) ??
-      ids.find((id) => id.startsWith('equip:'))
-    return equip ?? ids.find((id) => id.startsWith('hand:')) ?? choices[0].id
+    return pickZoneCard(state, playerId, ids) ?? choices[0].id
   }
   if (key === 'zone_pick') {
     const selected = state.prompt.selectedCardUids ?? []
@@ -297,11 +415,7 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
     if (selected.length >= need) return 'confirm'
     const remaining = ids.filter((id) => id !== 'confirm' && !selected.includes(id))
     if (!remaining.length) return ids.includes('confirm') ? 'confirm' : choices[0]?.id ?? null
-    const equip =
-      remaining.find((id) => id.startsWith('equip:weapon')) ??
-      remaining.find((id) => id.startsWith('equip:armor')) ??
-      remaining.find((id) => id.startsWith('equip:'))
-    return equip ?? remaining.find((id) => id.startsWith('hand:')) ?? remaining[0] ?? 'confirm'
+    return pickZoneCard(state, playerId, remaining) ?? remaining[0] ?? 'confirm'
   }
   if (key === 'ganglie') return ids.includes('discard') ? 'discard' : 'damage'
   if (key === 'jianxiong') return ids.includes('take') ? 'take' : 'skip'
@@ -337,14 +451,20 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
       return 'skip'
     }
 
-    const hitsMe =
-      (trick.type === 'aoe' && (trick.targets ?? []).includes(playerId)) ||
-      (typeof trick.targetId === 'number' && trick.targetId === playerId)
-    const fromEnemy = believedHostile(state, playerId, trick.sourceId)
-    if (hitsMe && fromEnemy && !w.nullified) return 'use'
-    if (!hitsMe && fromEnemy && trick.type === 'aoe' && !w.nullified) {
+    // 南蠻／萬箭：無懈對某一名角色的效果
+    if (trick.type === 'aoe_target' && trick.targetId !== undefined) {
+      const hitEnemy = believedHostile(state, playerId, trick.targetId)
+      // Protect self / ally from AOE
+      if (!hitEnemy && !w.nullified) return 'use'
+      // If someone nullified an enemy's hit, restore the AOE on them
+      if (hitEnemy && w.nullified) return 'use'
       return 'skip'
     }
+
+    const hitsMe =
+      typeof trick.targetId === 'number' && trick.targetId === playerId
+    const fromEnemy = believedHostile(state, playerId, trick.sourceId)
+    if (hitsMe && fromEnemy && !w.nullified) return 'use'
     return 'skip'
   }
   if (key === 'wugu') {
