@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&family=ZCOOL+XiaoWei&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Iansui&family=Noto+Serif+TC:wght@500;700&family=ZCOOL+XiaoWei&display=swap');
 
 :root {
   --ink: #1a120c;
@@ -332,10 +332,10 @@ input {
 }
 
 .story-hand {
-  font-family: 'Ma Shan Zheng', 'KaiTi', 'STKaiti', 'DFKai-SB', cursive;
-  font-size: clamp(1.35rem, 4.2vw, 1.75rem);
+  font-family: 'Iansui', 'Kaiti TC', 'BiauKai', 'DFKai-SB', 'KaiTi', cursive;
+  font-size: clamp(1.2rem, 3.8vw, 1.55rem);
   line-height: 1.95;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: rgba(255, 244, 214, 0.92);
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
 }
