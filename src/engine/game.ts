@@ -940,7 +940,7 @@ function askWuguPick(state: GameSnapshot): void {
  * Legal targets by card kind. Distance rules (classic):
  * - 殺: attack range (weapon)
  * - 過河拆橋 / 決鬥 / 火攻 / 樂不思蜀: no distance limit
- * - 順手牽羊 / 兵糧寸斷: distance ≤ 1
+ * - 順手牽羊 / 兵糧寸斷: distance ≤ 1 (seat + −1/+1 horses + 馬術)
  * - 奇才: your tricks ignore distance
  * - 借刀: first pick = weapon holder (no dist); kill target = holder's attack range
  */

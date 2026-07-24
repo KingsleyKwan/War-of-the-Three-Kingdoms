@@ -31,7 +31,7 @@ import {
   selectTarget,
 } from '../engine/game'
 import { listSkillActions } from '../engine/skills'
-import { canReach, seatDistance } from '../engine/helpers'
+import { canReach, getDistance } from '../engine/helpers'
 import type { GameSnapshot, GameMode, PlayerState, PlayFx } from '../engine/types'
 import { loadSettings, saveSettings, type AppSettings } from '../persist/settings'
 import { APP_VERSION } from '../version'
@@ -605,14 +605,7 @@ function renderTable(): string {
           const distFromHuman =
             p.id === human.id
               ? '—'
-              : String(
-                  seatDistance(
-                    human.id,
-                    p.id,
-                    n,
-                    g.players.map((x) => x.alive),
-                  ),
-                )
+              : String(getDistance(g, human.id, p.id))
           const reach =
             !picking && p.id !== human.id && p.alive && hasGen && canReach(g, human.id, p.id)
               ? 'in-range'

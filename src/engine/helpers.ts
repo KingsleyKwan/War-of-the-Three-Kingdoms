@@ -39,13 +39,24 @@ export function attackRangeOf(p: PlayerState): number {
 export function distanceMod(p: PlayerState): { minus: number; plus: number } {
   let minus = 0
   let plus = 0
+  // −1 坐騎（如赤兔）：你與其他角色的距離 −1
   if (p.equips.horseMinus) minus++
+  // +1 坐騎（如的盧）：其他角色與你的距離 +1
   if (p.equips.horsePlus) plus++
-  const g = getGeneral(p.generalId)
-  if (g.skills.includes('mashu')) minus++
+  if (p.generalId) {
+    try {
+      if (getGeneral(p.generalId).skills.includes('mashu')) minus++
+    } catch {
+      /* ignore unknown general */
+    }
+  }
   return { minus, plus }
 }
 
+/**
+ * Effective distance from A to B, including −1/+1 horses and 馬術.
+ * Used by 殺 reach, 順手牽羊, 兵糧寸斷, etc.
+ */
 export function getDistance(state: GameSnapshot, fromId: number, toId: number): number {
   const alive = state.players.map((p) => p.alive)
   const n = state.players.length
