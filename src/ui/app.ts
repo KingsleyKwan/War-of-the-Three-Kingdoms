@@ -442,7 +442,11 @@ function renderTable(): string {
         .join('')}
       ${renderArenaFx(g, human.id, n)}
     </div>
-    <div class="prompt-bar">${escapeHtml(prompt.message || '等待中…')}</div>
+    <div class="prompt-bar">${escapeHtml(
+      app.selectedUid && prompt.kind === 'choose_card'
+        ? '已選取手牌 — 再點一次同一張牌以打出，或點其他牌改選'
+        : prompt.message || '等待中…',
+    )}</div>
     ${picking ? renderGeneralPickPanel(g) : ''}
     <div class="log">${[...g.log]
       .slice(-6)
@@ -477,6 +481,11 @@ function renderTable(): string {
     </div>`
     }
     <div class="actions">
+      ${
+        !picking && isHumanTurn && prompt.kind === 'choose_card' && app.selectedUid
+          ? `<button type="button" class="btn ghost" id="cancel-select">取消選牌</button>`
+          : ''
+      }
       ${
         !picking && isHumanTurn && prompt.kind === 'choose_card'
           ? `<button type="button" class="btn" id="end-play">結束出牌</button>`
@@ -761,10 +770,28 @@ function bindTable(): void {
     btn.addEventListener('click', () => {
       if (app.aiBusy || g.matchPhase === 'pick_general') return
       const uid = (btn as HTMLElement).dataset.uid!
+      // Outgoing play: first click selects, second click confirms
+      if (g.prompt.kind === 'choose_card') {
+        if (app.selectedUid !== uid) {
+          app.selectedUid = uid
+          render()
+          return
+        }
+        selectCard(g, human.id, uid)
+        app.selectedUid = null
+        void continueAi()
+        return
+      }
+      // Responses / discard: single click
       selectCard(g, human.id, uid)
       app.selectedUid = null
       void continueAi()
     })
+  })
+
+  root().querySelector('#cancel-select')?.addEventListener('click', () => {
+    app.selectedUid = null
+    render()
   })
 
   root().querySelectorAll('.seat.targetable').forEach((btn) => {

@@ -671,34 +671,38 @@ function handleResponse(state: GameSnapshot, playerId: number, uid: string): voi
   if (!card) return
   discardCard(state, card)
   const kind = state.prompt.kind
+  const def = getCardDef(card.defId)
 
-  if (kind === 'respond_shan' && state.pending?.type === 'sha') {
-    const def = getCardDef(card.defId)
+  if (kind === 'respond_shan') {
     setPlayFx(state, {
       cardName: def.name,
       suit: def.suit,
       rank: def.rank,
       sourceId: playerId,
-      targetIds: [state.pending.sourceId],
-      note: '抵消',
+      targetIds: state.pending?.type === 'sha' ? [state.pending.sourceId] : [],
+      note: '閃',
     })
-    log(state, `${p.name} 打出【閃】，抵消了殺。`)
-    // 張角雷擊簡化
-    if (getGeneral(p.generalId).skills.includes('leiji')) {
-      const foes = enemiesOf(state, playerId)
-      if (foes.length) {
-        const t = foes[0]
-        dealDamage(state, t, 1, playerId)
-        log(state, `${p.name} 發動雷擊！`)
+    if (state.pending?.type === 'sha') {
+      log(state, `${p.name} 打出【閃】，抵消了殺。`)
+      if (getGeneral(p.generalId).skills.includes('leiji')) {
+        const foes = enemiesOf(state, playerId)
+        if (foes.length) {
+          const t = foes[0]
+          dealDamage(state, t, 1, playerId)
+          log(state, `${p.name} 發動雷擊！`)
+        }
       }
+      state.pending = undefined
+      resumeAfterResponse(state)
+      return
     }
-    state.pending = undefined
+    // AOE（萬箭齊發等）成功打出閃
+    log(state, `${p.name} 打出【閃】，響應成功。`)
     resumeAfterResponse(state)
     return
   }
 
   if (kind === 'respond_sha') {
-    const def = getCardDef(card.defId)
     setPlayFx(state, {
       cardName: def.name,
       suit: def.suit,
@@ -708,7 +712,6 @@ function handleResponse(state: GameSnapshot, playerId: number, uid: string): voi
       note: '響應',
     })
     log(state, `${p.name} 打出【殺】。`)
-    // used by nanman / juedou chain — simplified: success, continue
     state.pending = undefined
     resumeAfterResponse(state)
   }
@@ -716,15 +719,24 @@ function handleResponse(state: GameSnapshot, playerId: number, uid: string): voi
 
 export function passResponse(state: GameSnapshot, playerId: number): void {
   if (state.prompt.actorId !== playerId) return
-  if (state.prompt.kind === 'respond_shan' && state.pending?.type === 'sha') {
-    log(state, `${state.players[playerId].name} 放棄出閃。`)
-    finishShaHit(state, 1)
+  if (state.prompt.kind === 'respond_shan') {
+    if (state.pending?.type === 'sha') {
+      log(state, `${state.players[playerId].name} 放棄出閃。`)
+      finishShaHit(state, 1)
+      return
+    }
+    // AOE：未出閃受傷
+    const aoe = getAoeQueue(state)
+    const src = aoe?.sourceId ?? state.currentPlayer
+    log(state, `${state.players[playerId].name} 放棄出閃，受到傷害。`)
+    dealDamage(state, playerId, 1, src)
+    resumeAfterResponse(state)
     return
   }
   if (state.prompt.kind === 'respond_sha') {
+    const aoe = getAoeQueue(state)
+    const src = aoe?.sourceId ?? state.currentPlayer
     log(state, `${state.players[playerId].name} 放棄出殺，受到傷害。`)
-    // AOE damage handled in queue — for simplicity damage self from AOE marker
-    const src = state.currentPlayer
     dealDamage(state, playerId, 1, src)
     resumeAfterResponse(state)
   }
@@ -744,17 +756,31 @@ function finishShaHit(state: GameSnapshot, dmg: number): void {
 function resumeAfterResponse(state: GameSnapshot): void {
   checkVictory(state)
   if (state.winnerIds) return
-  // If AOE queue exists continue — stored on state via (state as any)
-  const queue = (state as GameSnapshot & { _aoe?: { sourceId: number; targets: number[]; need: 'sha' | 'shan'; name: string } })._aoe
+  const queue = getAoeQueue(state)
   if (queue && queue.targets.length) {
     const next = queue.targets.shift()!
     askAOEResponse(state, queue.sourceId, next, queue.need, queue.name)
     return
   }
   if (queue) {
-    delete (state as GameSnapshot & { _aoe?: unknown })._aoe
+    clearAoeQueue(state)
   }
   if (state.phase === 'play') setPlayPrompt(state)
+}
+
+type AoeQueue = {
+  sourceId: number
+  targets: number[]
+  need: 'sha' | 'shan'
+  name: string
+}
+
+function getAoeQueue(state: GameSnapshot): AoeQueue | undefined {
+  return (state as GameSnapshot & { _aoe?: AoeQueue })._aoe
+}
+
+function clearAoeQueue(state: GameSnapshot): void {
+  delete (state as GameSnapshot & { _aoe?: AoeQueue })._aoe
 }
 
 function resolveAOE(
@@ -764,7 +790,12 @@ function resolveAOE(
   need: 'sha' | 'shan',
   name: string,
 ): void {
-  ;(state as GameSnapshot & { _aoe?: unknown })._aoe = { sourceId, targets: [...targets], need, name }
+  ;(state as GameSnapshot & { _aoe?: AoeQueue })._aoe = {
+    sourceId,
+    targets: [...targets],
+    need,
+    name,
+  }
   resumeAfterResponse(state)
 }
 
