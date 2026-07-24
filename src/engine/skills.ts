@@ -2,7 +2,7 @@ import { getGeneral } from '../data/generals'
 import { getCardDef } from '../data/cards'
 import type { GameSnapshot, PlayerState } from './types'
 import { attackRangeOf, canReach, getDistance } from './helpers'
-import { weaponKind } from './weapons'
+import { mayUseSha, weaponKind } from './weapons'
 
 export interface SkillAction {
   id: string
@@ -81,12 +81,16 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
       actions.push({ id: 'fanjian', label: '反間', hint: '交給一名角色一張牌並令其猜花色' })
     }
   }
-  if (weaponKind(p) === 'zhangba' && p.hand.length >= 2) {
+  if (weaponKind(p) === 'zhangba' && p.hand.length >= 2 && mayUseSha(p)) {
     const canHit = state.players.some(
       (t) => t.alive && t.id !== playerId && canReach(state, playerId, t.id),
     )
     if (canHit) {
-      actions.push({ id: 'zhangba', label: '丈八出殺', hint: '將兩張手牌當【殺】使用' })
+      actions.push({
+        id: 'zhangba',
+        label: '丈八出殺',
+        hint: '將兩張手牌當【殺】使用（本階段限一次，諸葛連弩／咆哮除外）',
+      })
     }
   }
   return actions

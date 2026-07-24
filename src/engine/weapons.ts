@@ -8,6 +8,13 @@ export function weaponKind(p: PlayerState): string | null {
   return w ? getCardDef(w.defId).kind : null
 }
 
+/** True if this seat may still use 【殺】 this turn (諸葛連弩／咆哮 allow extras). */
+export function mayUseSha(p: PlayerState): boolean {
+  if (!p.shaUsedThisTurn) return true
+  if (p.generalId && getGeneral(p.generalId).skills.includes('paoxiao')) return true
+  return weaponKind(p) === 'zhuge'
+}
+
 export function armorKind(p: PlayerState): string | null {
   const a = p.equips.armor
   return a ? getCardDef(a.defId).kind : null

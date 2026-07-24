@@ -33,6 +33,7 @@ import {
   drawJudgeCard,
   horseLabel,
   ignoresArmor,
+  mayUseSha,
   oppositeGender,
   targetHorses,
   weaponKind,
@@ -570,9 +571,7 @@ function canPlayCard(state: GameSnapshot, playerId: number, uid: string): boolea
   const tryKinds = playAs.length ? playAs : [kind]
   for (const k of tryKinds) {
     if (k === 'sha') {
-      if (p.shaUsedThisTurn && !getGeneral(p.generalId).skills.includes('paoxiao') && !hasZhuge(p)) {
-        continue
-      }
+      if (!mayUseSha(p)) continue
       if (enemiesOf(state, playerId).some((t) => canReach(state, playerId, t))) return true
       continue
     }
@@ -601,11 +600,6 @@ function canPlayCard(state: GameSnapshot, playerId: number, uid: string): boolea
     }
   }
   return false
-}
-
-function hasZhuge(p: PlayerState): boolean {
-  const w = p.equips.weapon
-  return !!w && getCardDef(w.defId).kind === 'zhuge'
 }
 
 export function getPlayKindOptions(p: PlayerState, card: CardInstance): string[] {
@@ -3109,6 +3103,11 @@ function applyZoneCardIds(
 }
 
 function finishZonePickSkill(state: GameSnapshot, skillId: string, _ids: string[]): void {
+  // Clear completed zone_pick so damage / resume flows do not treat it as still open.
+  if (state.prompt.kind === 'choice' && state.prompt.choiceKey === 'zone_pick') {
+    state.prompt = idlePrompt()
+  }
+
   if (skillId === 'guanshi') {
     if (state.pending?.type === 'sha') {
       const name = state.players[state.pending.sourceId].name
@@ -3863,7 +3862,7 @@ export function activateSkill(state: GameSnapshot, playerId: number, skillId: st
   }
 
   if (skillId === 'zhangba') {
-    if (weaponKind(p) !== 'zhangba' || p.hand.length < 2) return
+    if (weaponKind(p) !== 'zhangba' || p.hand.length < 2 || !mayUseSha(p)) return
     state.prompt = {
       kind: 'skill_cards',
       message: '【丈八蛇矛】選擇兩張手牌當【殺】使用',
@@ -3950,7 +3949,10 @@ function confirmSkillCards(state: GameSnapshot, playerId: number): void {
   }
 
   if (skillId === 'zhangba') {
-    if (selected.length !== 2) return
+    if (selected.length !== 2 || !mayUseSha(p)) {
+      setPlayPrompt(state)
+      return
+    }
     const targets = legalTargets(state, playerId, 'sha')
     if (!targets.length) {
       setPlayPrompt(state)
@@ -4086,7 +4088,7 @@ function finishZhangba(
   targetId: number,
 ): void {
   const p = state.players[playerId]
-  if (uids.length !== 2) {
+  if (uids.length !== 2 || !mayUseSha(p)) {
     setPlayPrompt(state)
     return
   }
