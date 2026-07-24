@@ -5,6 +5,7 @@ import {
   playableCards,
   selectCard,
   selectTarget,
+  clearPlayFx,
 } from '../engine/game'
 import { cardKind } from '../engine/helpers'
 import type { GameSnapshot } from '../engine/types'
@@ -45,6 +46,10 @@ export async function runAiUntilHuman(
         onTick?.()
       } else if (state.fx.play || state.fx.damages.length) {
         await sleep(Math.min(Math.max(delay, 600), 1000))
+        // Effect finished (back to human play) — remove played card
+        if (state.prompt.kind === 'choose_card' || state.prompt.kind === 'discard') {
+          clearPlayFx(state)
+        }
         onTick?.()
       }
     }

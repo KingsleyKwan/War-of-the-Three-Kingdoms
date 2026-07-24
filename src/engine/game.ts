@@ -58,6 +58,12 @@ function pushDamageFx(state: GameSnapshot, playerId: number, amount: number): vo
   ]
 }
 
+/** Remove center played-card (and finished damage pops) after the effect resolves */
+export function clearPlayFx(state: GameSnapshot): void {
+  state.fx.play = null
+  state.fx.damages = []
+}
+
 export function createMatch(config: MatchConfig): GameSnapshot {
   uidSeq = 1
   const defs = buildDeck(config.packs)

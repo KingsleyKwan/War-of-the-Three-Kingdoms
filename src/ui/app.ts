@@ -13,6 +13,7 @@ import { CARD_HELP, rankLabel, suitName, suitSymbol } from '../data/help'
 import { portraitDataUri } from '../data/portraits'
 import {
   cancelTarget,
+  clearPlayFx,
   confirmGeneralPick,
   createMatch,
   endPlayPhase,
@@ -703,13 +704,15 @@ async function continueAi(): Promise<void> {
   const g = app.game
   if (!g || app.aiBusy) return
   if (g.matchPhase === 'pick_general') return
-  // Brief pause after human action so their card FX is visible
+  // Brief pause after action so card FX is visible, then clear when resolved
   if (g.fx.play || g.fx.damages.length) {
     app.aiBusy = true
     render()
     const hold = Math.min(Math.max(app.settings.thinkDelayMs, 500), 1000)
     await new Promise((r) => setTimeout(r, hold))
+    if (isEffectResolved(g)) clearPlayFx(g)
     app.aiBusy = false
+    render()
   }
   app.aiBusy = true
   render()
@@ -720,8 +723,20 @@ async function continueAi(): Promise<void> {
   } finally {
     app.aiBusy = false
   }
+  if (isEffectResolved(g)) clearPlayFx(g)
   maybeFinish()
   render()
+}
+
+function isEffectResolved(g: GameSnapshot): boolean {
+  const k = g.prompt.kind
+  return (
+    k === 'choose_card' ||
+    k === 'discard' ||
+    k === 'game_over' ||
+    k === 'idle' ||
+    k === 'choose_general'
+  )
 }
 
 function bindTable(): void {
