@@ -1,5 +1,6 @@
 import {
   activateSkill,
+  cancelTarget,
   endPlayPhase,
   getPlayKindOptions,
   passResponse,
@@ -68,6 +69,12 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
     if (id) {
       setSeatThought(state, playerId, `選擇：${id}`)
       resolveChoice(state, playerId, id)
+    } else {
+      const fallback = prompt.choices?.[0]?.id
+      if (fallback) {
+        setSeatThought(state, playerId, `選擇後備：${fallback}`)
+        resolveChoice(state, playerId, fallback)
+      }
     }
     return
   }
@@ -109,6 +116,11 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
 
   if (prompt.kind === 'choose_target') {
     const targets = prompt.targetIds ?? []
+    if (!targets.length) {
+      setSeatThought(state, playerId, '無合法目標，取消')
+      cancelTarget(state, playerId)
+      return
+    }
     const kind = prompt.respondKinds?.[0]
     let best = targets[0]
     if (kind === 'sha' || kind === 'juedou' || kind === 'huogong') {
@@ -172,10 +184,18 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
         ? 'sha'
         : opts[0]
     setSeatThought(state, playerId, `打出 ${getCardDef(card.defId).name}`)
+    const kindBefore = state.prompt.kind
+    const logBefore = state.log.length
     selectCard(state, playerId, card.uid, prefer)
 
     if (state.prompt.kind === 'choose_target' && state.prompt.actorId === playerId) {
       stepAiSimple(state, playerId)
+      return
+    }
+    // Card play did nothing (no legal follow-up) — end the phase to avoid soft-locks
+    if (state.prompt.kind === kindBefore && state.log.length === logBefore) {
+      setSeatThought(state, playerId, '出牌無效，結束出牌')
+      endPlayPhase(state, playerId)
     }
     return
   }
@@ -268,6 +288,7 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
     const need = state.prompt.minTargets ?? 1
     if (selected.length >= need) return 'confirm'
     const remaining = ids.filter((id) => id !== 'confirm' && !selected.includes(id))
+    if (!remaining.length) return ids.includes('confirm') ? 'confirm' : choices[0]?.id ?? null
     const equip =
       remaining.find((id) => id.startsWith('equip:weapon')) ??
       remaining.find((id) => id.startsWith('equip:armor')) ??

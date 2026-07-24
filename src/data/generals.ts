@@ -53,7 +53,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['tiandu', 'yiji'],
-    skillText: '天妒：判定牌生效後可獲得之。遺計（未完整）。',
+    skillText: '天妒：判定牌生效後可獲得之。遺計：每受到1點傷害後摸兩張牌。',
   },
   {
     id: 'zhenji',
@@ -98,7 +98,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['guanxing', 'kongcheng'],
-    skillText: '觀星／空城（簡化：手牌為0時不能成為殺的目標）。',
+    skillText: '空城：手牌為0時不能成為殺的目標。觀星（未實裝）。',
   },
   {
     id: 'zhaoyun',
@@ -125,7 +125,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'female',
     skills: ['jizhi', 'qicai'],
-    skillText: '集智：使用錦囊後摸一張。',
+    skillText: '集智：使用錦囊後摸一張。奇才：錦囊無距離限制。',
   },
   {
     id: 'sunquan',
@@ -188,7 +188,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['qianxun', 'lianying'],
-    skillText: '連營：失去最後的手牌時摸一張。謙遜（未完整）。',
+    skillText: '謙遜：不能成為順手牽羊的目標。連營：失去最後的手牌時摸一張。',
   },
   {
     id: 'sunshangxiang',

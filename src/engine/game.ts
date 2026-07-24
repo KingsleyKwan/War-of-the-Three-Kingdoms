@@ -397,7 +397,8 @@ function canPlayCard(state: GameSnapshot, playerId: number, uid: string): boolea
     if (k === 'shan' || k === 'wuxie') continue
     if (k === 'wuzhong' || k === 'taoyuan' || k === 'wugu' || k === 'nanman' || k === 'wanjian') return true
     if (k === 'guohe' || k === 'shunshou' || k === 'juedou' || k === 'huogong') {
-      if (state.players.some((t) => t.alive && t.id !== playerId)) return true
+      if (legalTargets(state, playerId, k).length > 0) return true
+      continue
     }
   }
   return false
@@ -573,6 +574,10 @@ function afterTrick(state: GameSnapshot, p: PlayerState): void {
 }
 
 function legalTargets(state: GameSnapshot, playerId: number, kind: string): number[] {
+  const source = state.players[playerId]
+  const sourceSkills = source.generalId ? getGeneral(source.generalId).skills : []
+  const ignoreTrickDist = sourceSkills.includes('qicai')
+
   if (kind === 'sha') {
     return enemiesOf(state, playerId).filter((t) => {
       const target = state.players[t]
@@ -587,11 +592,23 @@ function legalTargets(state: GameSnapshot, playerId: number, kind: string): numb
     return state.players
       .filter((t) => {
         if (!t.alive || t.id === playerId) return false
+        // 謙遜：不能成為順手牽羊的目標
+        if (
+          kind === 'shunshou' &&
+          t.generalId &&
+          getGeneral(t.generalId).skills.includes('qianxun')
+        ) {
+          return false
+        }
         if (kind === 'guohe' || kind === 'shunshou') {
           const hasJudge = (t.judges?.length ?? 0) > 0
           if (t.hand.length === 0 && equipSlots().every((s) => !t.equips[s]) && !hasJudge) {
             return false
           }
+        }
+        // 錦囊距離：奇才無視；否則需在攻擊範圍內（決鬥／火攻／過河／順手）
+        if (!ignoreTrickDist && !canReach(state, playerId, t.id)) {
+          return false
         }
         return true
       })
@@ -2094,14 +2111,25 @@ function dealDamage(
   const natureLabel = nature === 'fire' ? '火焰' : nature === 'thunder' ? '雷電' : ''
   log(state, `${t.name} 受到 ${amount} 點${natureLabel}傷害（體力 ${Math.max(t.hp, 0)}）。`)
 
+  // After-damage skills that still apply while dying (e.g. 遺計 can draw 桃 before save)
+  if (t.generalId) {
+    const afterSkills = getGeneral(t.generalId).skills
+    // 遺計：每受到1點傷害後摸兩張牌
+    if (afterSkills.includes('yiji') && amount > 0) {
+      const n = amount * 2
+      draw(state, targetId, n)
+      log(state, `${t.name} 發動遺計，摸 ${n} 張牌。`)
+    }
+  }
+
   if (t.hp <= 0) {
     trySave(state, targetId, sourceId)
   }
 
-  if (sourceId !== null && t.alive) {
+  if (t.alive) {
     const skills = getGeneral(t.generalId).skills
     // 奸雄：獲得造成傷害的牌，否則摸一張
-    if (skills.includes('jianxiong')) {
+    if (skills.includes('jianxiong') && sourceId !== null) {
       let got = false
       if (damageCard) {
         const idx = state.discard.findIndex((c) => c.uid === damageCard.uid)
@@ -2118,7 +2146,7 @@ function dealDamage(
       }
     }
     // 反饋：選擇獲得傷害來源一張牌
-    if (skills.includes('fankui') && source && countDiscardable(source) > 0) {
+    if (skills.includes('fankui') && sourceId !== null && source && countDiscardable(source) > 0) {
       beginZonePick(state, {
         actorId: targetId,
         ownerId: sourceId,
@@ -2130,7 +2158,7 @@ function dealDamage(
       return true
     }
     // 剛烈：判定，非紅桃則來源棄兩張或受1傷
-    if (skills.includes('ganglie') && source) {
+    if (skills.includes('ganglie') && sourceId !== null && source) {
       const judged = drawJudgeCard(state, shuffle)
       if (judged) {
         discardCard(state, judged)
@@ -2167,6 +2195,17 @@ function dealDamage(
 
   checkVictory(state)
   return false
+}
+
+/** Exposed for skill regression tests */
+export function debugDealDamage(
+  state: GameSnapshot,
+  targetId: number,
+  amount: number,
+  sourceId: number | null,
+  nature: 'normal' | 'fire' | 'thunder' = 'normal',
+): boolean {
+  return dealDamage(state, targetId, amount, sourceId, nature)
 }
 
 function trySave(state: GameSnapshot, targetId: number, killerId: number | null = null): void {
@@ -2560,6 +2599,15 @@ export function cancelTarget(state: GameSnapshot, playerId: number): void {
 
 export function legalTargetsForPrompt(state: GameSnapshot): number[] {
   return state.prompt.targetIds ?? []
+}
+
+/** Compute legal targets for a card kind (for UI/tests) */
+export function getLegalTargets(
+  state: GameSnapshot,
+  playerId: number,
+  kind: string,
+): number[] {
+  return legalTargets(state, playerId, kind)
 }
 
 export function getAttackRange(p: PlayerState): number {
