@@ -9,9 +9,18 @@ import {
 import { cardKind } from '../engine/helpers'
 import type { GameSnapshot } from '../engine/types'
 import { getCardDef } from '../data/cards'
+import { loadSettings } from '../persist/settings'
 
-/** Drive AI until human input is required or game over */
-export function runAiUntilHuman(state: GameSnapshot): void {
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Drive AI until human input is required or game over, with think delay */
+export async function runAiUntilHuman(
+  state: GameSnapshot,
+  onTick?: () => void,
+): Promise<void> {
+  const delay = loadSettings().thinkDelayMs
   let guard = 0
   while (!state.winnerIds && guard++ < 200) {
     const actorId = state.prompt.actorId
@@ -20,7 +29,14 @@ export function runAiUntilHuman(state: GameSnapshot): void {
     }
     const actor = state.players[actorId]
     if (actor.isHuman) break
-    stepAi(state, actorId)
+    onTick?.()
+    if (delay > 0) await sleep(delay)
+    if (state.winnerIds) break
+    const again = state.prompt.actorId
+    if (again === null) break
+    if (state.players[again]?.isHuman) break
+    stepAi(state, again)
+    onTick?.()
   }
 }
 
@@ -35,7 +51,6 @@ function stepAi(state: GameSnapshot, playerId: number): void {
 
   if (prompt.kind === 'discard') {
     const uids = [...(prompt.cardUids ?? [])]
-    // discard least useful: prefer shan excess, then high count kinds
     uids.sort((a, b) => scoreDiscard(state, playerId, a) - scoreDiscard(state, playerId, b))
     if (uids[0]) selectCard(state, playerId, uids[0])
     return
@@ -54,7 +69,6 @@ function stepAi(state: GameSnapshot, playerId: number): void {
 
   if (prompt.kind === 'choose_card') {
     const cards = playableCards(state, playerId)
-    // Priority: equip > tao if hurt > sha > wuzhong > tricks > end
     const scored = cards
       .map((c) => ({ c, s: scorePlay(state, playerId, c.uid) }))
       .sort((a, b) => b.s - a.s)
@@ -73,7 +87,7 @@ function stepAi(state: GameSnapshot, playerId: number): void {
         : opts[0]
     selectCard(state, playerId, card.uid, prefer)
 
-    // If now choosing target, pick immediately
+    // Target choice is same "move" — no extra delay here; next loop iteration delays
     if (state.prompt.kind === 'choose_target' && state.prompt.actorId === playerId) {
       stepAi(state, playerId)
     }

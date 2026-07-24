@@ -153,26 +153,39 @@ export function buildStageMatch(
 }
 
 export function buildFreeMatch(opts: {
-  mode: 'duel' | 'identity5'
+  mode: 'duel' | 'identity5' | 'identity8'
   useEx: boolean
   humanGeneralId: string
 }): MatchConfig {
   const packs: PackId[] = opts.useEx ? ['standard', 'ex'] : ['standard']
 
   if (opts.mode === 'duel') {
+    const foes = ['lvbu', 'zhangfei', 'ganning', 'machao'].filter(
+      (id) => id !== opts.humanGeneralId,
+    )
     return {
       mode: 'duel',
       packs,
       humanSeat: 0,
       players: [
         { name: '你', isHuman: true, generalId: opts.humanGeneralId, identity: 'none' },
-        { name: '電腦', isHuman: false, generalId: 'lvbu', identity: 'none' },
+        {
+          name: '電腦',
+          isHuman: false,
+          generalId: foes[Math.floor(Math.random() * foes.length)],
+          identity: 'none',
+        },
       ],
     }
   }
 
-  const identities: Identity[] = ['lord', 'loyal', 'rebel', 'rebel', 'spy']
+  const identities: Identity[] =
+    opts.mode === 'identity8'
+      ? ['lord', 'loyal', 'loyal', 'rebel', 'rebel', 'rebel', 'rebel', 'spy']
+      : ['lord', 'loyal', 'rebel', 'rebel', 'spy']
+
   const shuffled = [...identities].sort(() => Math.random() - 0.5)
+  const needAi = shuffled.length - 1
   const pool = [
     'caocao',
     'liubei',
@@ -188,9 +201,19 @@ export function buildFreeMatch(opts: {
     'huatuo',
     'machao',
     'lvmeng',
+    'xiahoudun',
+    'zhangliao',
+    'huanggai',
+    'luxun',
+    'daqiao',
+    'sunshangxiang',
+    'guojia',
+    'xuchu',
+    'zhugeliang',
+    'huangyueying',
   ].filter((id) => id !== opts.humanGeneralId)
 
-  const aiGenerals = [...pool].sort(() => Math.random() - 0.5).slice(0, 4)
+  const aiGenerals = [...pool].sort(() => Math.random() - 0.5).slice(0, needAi)
   const players: MatchConfig['players'] = shuffled.map((identity, i) => {
     if (i === 0) {
       return {
@@ -208,5 +231,5 @@ export function buildFreeMatch(opts: {
     }
   })
 
-  return { mode: 'identity5', packs, humanSeat: 0, players }
+  return { mode: opts.mode, packs, humanSeat: 0, players }
 }

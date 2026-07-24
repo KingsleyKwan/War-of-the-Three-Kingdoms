@@ -16,6 +16,7 @@ import {
   equipSlots,
   findCard,
   handLimit,
+  isBlackCard,
   isRedCard,
   removeHand,
   shuffle,
@@ -49,7 +50,7 @@ export function createMatch(config: MatchConfig): GameSnapshot {
   })
 
   // Lord +1 HP in identity
-  if (config.mode === 'identity5') {
+  if (config.mode === 'identity5' || config.mode === 'identity8') {
     const lord = players.find((p) => p.identity === 'lord')
     if (lord) {
       lord.maxHp += 1
@@ -62,9 +63,10 @@ export function createMatch(config: MatchConfig): GameSnapshot {
     players,
     deck,
     discard: [],
-    currentPlayer: config.mode === 'identity5'
-      ? players.find((p) => p.identity === 'lord')?.id ?? 0
-      : 0,
+    currentPlayer:
+      config.mode === 'identity5' || config.mode === 'identity8'
+        ? (players.find((p) => p.identity === 'lord')?.id ?? 0)
+        : 0,
     phase: 'prepare',
     round: 1,
     prompt: idlePrompt(),
@@ -202,9 +204,9 @@ export function getPlayKindOptions(p: PlayerState, card: CardInstance): string[]
     if (kind === 'sha') opts.push('shan')
     if (kind === 'shan') opts.push('sha')
   }
-  if (skills.includes('qixi') && !isRedCard(card)) opts.push('guohe')
+  if (skills.includes('qixi') && isBlackCard(card)) opts.push('guohe')
   if (skills.includes('jijiu') && isRedCard(card)) opts.push('tao')
-  if (skills.includes('qingguo') && !isRedCard(card)) opts.push('shan')
+  if (skills.includes('qingguo') && isBlackCard(card)) opts.push('shan')
   return [...new Set(opts)]
 }
 
@@ -394,6 +396,18 @@ function playEquip(state: GameSnapshot, playerId: number, card: CardInstance): v
 function askShan(state: GameSnapshot, sourceId: number, targetId: number, cardUid: string): void {
   const target = state.players[targetId]
   const source = state.players[sourceId]
+  // 仁王盾：黑色殺無效
+  const shaCard = state.discard.find((c) => c.uid === cardUid) ?? { uid: cardUid, defId: '' }
+  const armor = target.equips.armor
+  if (armor && getCardDef(armor.defId).kind === 'renwang') {
+    const shaDefId = shaCard.defId || findRecentShaDef(state)
+    if (shaDefId && isBlackCard({ uid: cardUid, defId: shaDefId })) {
+      log(state, `${target.name} 的【仁王盾】抵消了黑色【殺】。`)
+      state.pending = undefined
+      resumeAfterResponse(state)
+      return
+    }
+  }
   const needTwo = getGeneral(source.generalId).skills.includes('wushuang')
   const shanCards = responseCards(target, 'shan')
   state.pending = { type: 'sha', sourceId, targetId, cardUid }
@@ -410,6 +424,13 @@ function askShan(state: GameSnapshot, sourceId: number, targetId: number, cardUi
   }
 }
 
+function findRecentShaDef(state: GameSnapshot): string | null {
+  for (let i = state.discard.length - 1; i >= 0; i--) {
+    if (getCardDef(state.discard[i].defId).kind === 'sha') return state.discard[i].defId
+  }
+  return null
+}
+
 function responseCards(p: PlayerState, need: 'shan' | 'sha' | 'tao'): CardInstance[] {
   const skills = getGeneral(p.generalId).skills
   return p.hand.filter((c) => {
@@ -418,7 +439,7 @@ function responseCards(p: PlayerState, need: 'shan' | 'sha' | 'tao'): CardInstan
       if (cardKind(c) === 'sha') opts.push('shan')
       if (cardKind(c) === 'shan') opts.push('sha')
     }
-    if (skills.includes('qingguo') && !isRedCard(c)) opts.push('shan')
+    if (skills.includes('qingguo') && isBlackCard(c)) opts.push('shan')
     if (skills.includes('wusheng') && isRedCard(c)) opts.push('sha')
     if (skills.includes('jijiu') && isRedCard(c)) opts.push('tao')
     return opts.includes(need)

@@ -5,7 +5,7 @@ export type PackId = 'standard' | 'ex'
 export type Identity = 'lord' | 'loyal' | 'rebel' | 'spy' | 'none'
 export type Kingdom = 'wei' | 'shu' | 'wu' | 'qun' | 'god'
 export type Phase = 'prepare' | 'judge' | 'draw' | 'play' | 'discard' | 'end'
-export type GameMode = 'duel' | 'identity5'
+export type GameMode = 'duel' | 'identity5' | 'identity8'
 
 export interface CardDef {
   id: string

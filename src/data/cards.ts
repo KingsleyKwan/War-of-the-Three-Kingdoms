@@ -1,64 +1,111 @@
-import type { CardDef, PackId } from '../engine/types'
+import type { CardDef, PackId, Suit } from '../engine/types'
 
-/** Minimal standard + selected 軍爭 cards for MVP */
-export const CARD_DEFS: CardDef[] = [
-  ...dup('sha', '殺', 'basic', 'standard', 30),
-  ...dup('shan', '閃', 'basic', 'standard', 15),
-  ...dup('tao', '桃', 'basic', 'standard', 8),
+type Spec = {
+  kind: string
+  name: string
+  type: CardDef['type']
+  pack: PackId
+  suit: Suit
+  rank: number
+  slot?: CardDef['slot']
+  attackRange?: number
+}
 
-  ...dup('wuzhong', '無中生有', 'trick', 'standard', 4),
-  ...dup('guohe', '過河拆橋', 'trick', 'standard', 6),
-  ...dup('shunshou', '順手牽羊', 'trick', 'standard', 5),
-  ...dup('jiedao', '借刀殺人', 'trick', 'standard', 2),
-  ...dup('wuxie', '無懈可擊', 'trick', 'standard', 4),
-  ...dup('nanman', '南蠻入侵', 'trick', 'standard', 3),
-  ...dup('wanjian', '萬箭齊發', 'trick', 'standard', 1),
-  ...dup('juedou', '決鬥', 'trick', 'standard', 3),
-  ...dup('taoyuan', '桃園結義', 'trick', 'standard', 1),
-  ...dup('wugu', '五穀豐登', 'trick', 'standard', 1),
-
-  ...eq('zhuge', '諸葛連弩', 'weapon', 'standard', 1, 1),
-  ...eq('cixiong', '雌雄雙股劍', 'weapon', 'standard', 2, 1),
-  ...eq('qinggang', '青釭劍', 'weapon', 'standard', 2, 1),
-  ...eq('qinglong', '青龍偃月刀', 'weapon', 'standard', 3, 1),
-  ...eq('zhangba', '丈八蛇矛', 'weapon', 'standard', 3, 1),
-  ...eq('guanshi', '貫石斧', 'weapon', 'standard', 3, 1),
-  ...eq('fangtian', '方天畫戟', 'weapon', 'standard', 4, 1),
-  ...eq('qilingong', '麒麟弓', 'weapon', 'standard', 5, 1),
-  ...eq('bagua', '八卦陣', 'armor', 'standard', undefined, 2),
-  ...eq('renwang', '仁王盾', 'armor', 'standard', undefined, 1),
-  ...eq('chitu', '赤兔', 'horseMinus', 'standard', undefined, 1),
-  ...eq('dayuan', '大宛', 'horseMinus', 'standard', undefined, 1),
-  ...eq('zixing', '紫騂', 'horseMinus', 'standard', undefined, 1),
-  ...eq('dilu', '的盧', 'horsePlus', 'standard', undefined, 1),
-  ...eq('jueying', '絕影', 'horsePlus', 'standard', undefined, 1),
-  ...eq('zhuahuang', '爪黃飛電', 'horsePlus', 'standard', undefined, 1),
-
-  ...dup('huogong', '火攻', 'trick', 'ex', 3),
-  ...dup('tiesuo', '鐵索連環', 'trick', 'ex', 3),
-  ...dup('bingliang', '兵糧寸斷', 'trick', 'ex', 2),
-  ...dup('lebu', '樂不思蜀', 'trick', 'ex', 3),
-  ...eq('hanbing', '寒冰劍', 'weapon', 'ex', 2, 1),
-  ...eq('guding', '古錠刀', 'weapon', 'ex', 2, 1),
-  ...eq('tengjia', '藤甲', 'armor', 'ex', undefined, 2),
-  ...eq('baiyin', '白銀獅子', 'armor', 'ex', undefined, 1),
-  ...eq('hualiu', '驊騮', 'horsePlus', 'ex', undefined, 1),
+/** Cards with explicit 花色 / 點數 for skill conditions */
+const SPECS: Spec[] = [
+  // —— 殺（多為黑色）——
+  ...spread('sha', '殺', 'basic', 'standard', [
+    ['spade', 2], ['spade', 3], ['spade', 4], ['spade', 5], ['spade', 6], ['spade', 7],
+    ['spade', 8], ['spade', 9], ['spade', 10],
+    ['club', 2], ['club', 3], ['club', 4], ['club', 5], ['club', 6], ['club', 7],
+    ['club', 8], ['club', 9], ['club', 10], ['club', 11],
+    ['heart', 10], ['heart', 11], ['heart', 12],
+    ['diamond', 6], ['diamond', 7], ['diamond', 8], ['diamond', 9], ['diamond', 10],
+    ['diamond', 13],
+  ]),
+  // —— 閃（紅色）——
+  ...spread('shan', '閃', 'basic', 'standard', [
+    ['heart', 2], ['heart', 13],
+    ['diamond', 2], ['diamond', 3], ['diamond', 4], ['diamond', 5], ['diamond', 6],
+    ['diamond', 7], ['diamond', 8], ['diamond', 9], ['diamond', 10], ['diamond', 11],
+    ['diamond', 11], ['heart', 8], ['heart', 9], ['heart', 11],
+  ]),
+  // —— 桃（紅桃）——
+  ...spread('tao', '桃', 'basic', 'standard', [
+    ['heart', 3], ['heart', 4], ['heart', 6], ['heart', 7], ['heart', 8],
+    ['heart', 9], ['heart', 12], ['diamond', 12],
+  ]),
+  // —— 錦囊 ——
+  ...spread('wuzhong', '無中生有', 'trick', 'standard', [
+    ['heart', 7], ['heart', 8], ['heart', 9], ['heart', 11],
+  ]),
+  ...spread('guohe', '過河拆橋', 'trick', 'standard', [
+    ['spade', 3], ['spade', 4], ['spade', 12],
+    ['club', 3], ['club', 4], ['heart', 12],
+  ]),
+  ...spread('shunshou', '順手牽羊', 'trick', 'standard', [
+    ['spade', 3], ['spade', 4], ['spade', 11], ['diamond', 3], ['diamond', 4],
+  ]),
+  ...spread('jiedao', '借刀殺人', 'trick', 'standard', [['club', 12], ['club', 13]]),
+  ...spread('wuxie', '無懈可擊', 'trick', 'standard', [
+    ['spade', 11], ['club', 12], ['club', 13], ['diamond', 12],
+  ]),
+  ...spread('nanman', '南蠻入侵', 'trick', 'standard', [
+    ['spade', 7], ['spade', 13], ['club', 7],
+  ]),
+  ...spread('wanjian', '萬箭齊發', 'trick', 'standard', [['heart', 1]]),
+  ...spread('juedou', '決鬥', 'trick', 'standard', [
+    ['spade', 1], ['club', 1], ['diamond', 1],
+  ]),
+  ...spread('taoyuan', '桃園結義', 'trick', 'standard', [['heart', 1]]),
+  ...spread('wugu', '五穀豐登', 'trick', 'standard', [['heart', 3]]),
+  // —— 裝備 ——
+  eq('zhuge', '諸葛連弩', 'weapon', 'standard', 'diamond', 1, 1),
+  eq('cixiong', '雌雄雙股劍', 'weapon', 'standard', 'spade', 2, 2),
+  eq('qinggang', '青釭劍', 'weapon', 'standard', 'spade', 6, 2),
+  eq('qinglong', '青龍偃月刀', 'weapon', 'standard', 'spade', 5, 3),
+  eq('zhangba', '丈八蛇矛', 'weapon', 'standard', 'spade', 12, 3),
+  eq('guanshi', '貫石斧', 'weapon', 'standard', 'diamond', 5, 3),
+  eq('fangtian', '方天畫戟', 'weapon', 'standard', 'diamond', 12, 4),
+  eq('qilingong', '麒麟弓', 'weapon', 'standard', 'heart', 5, 5),
+  eq('bagua', '八卦陣', 'armor', 'standard', 'spade', 2),
+  eq('bagua', '八卦陣', 'armor', 'standard', 'club', 2),
+  eq('renwang', '仁王盾', 'armor', 'standard', 'club', 2),
+  eq('chitu', '赤兔', 'horseMinus', 'standard', 'heart', 5),
+  eq('dayuan', '大宛', 'horseMinus', 'standard', 'spade', 13),
+  eq('zixing', '紫騂', 'horseMinus', 'standard', 'diamond', 13),
+  eq('dilu', '的盧', 'horsePlus', 'standard', 'club', 5),
+  eq('jueying', '絕影', 'horsePlus', 'standard', 'spade', 5),
+  eq('zhuahuang', '爪黃飛電', 'horsePlus', 'standard', 'heart', 13),
+  // —— 軍爭 ——
+  ...spread('huogong', '火攻', 'trick', 'ex', [
+    ['heart', 2], ['heart', 3], ['diamond', 12],
+  ]),
+  ...spread('tiesuo', '鐵索連環', 'trick', 'ex', [
+    ['spade', 11], ['spade', 12], ['club', 10],
+  ]),
+  ...spread('bingliang', '兵糧寸斷', 'trick', 'ex', [
+    ['spade', 10], ['club', 4],
+  ]),
+  ...spread('lebu', '樂不思蜀', 'trick', 'ex', [
+    ['spade', 6], ['club', 6], ['heart', 6],
+  ]),
+  eq('hanbing', '寒冰劍', 'weapon', 'ex', 'spade', 2, 2),
+  eq('guding', '古錠刀', 'weapon', 'ex', 'spade', 1, 2),
+  eq('tengjia', '藤甲', 'armor', 'ex', 'spade', 2),
+  eq('tengjia', '藤甲', 'armor', 'ex', 'club', 2),
+  eq('baiyin', '白銀獅子', 'armor', 'ex', 'club', 1),
+  eq('hualiu', '驊騮', 'horsePlus', 'ex', 'diamond', 13),
 ]
 
-function dup(
+function spread(
   kind: string,
   name: string,
   type: CardDef['type'],
   pack: PackId,
-  count: number,
-): CardDef[] {
-  return Array.from({ length: count }, (_, i) => ({
-    id: `${pack}_${kind}_${i}`,
-    name,
-    type,
-    pack,
-    kind,
-  }))
+  list: Array<[Suit, number]>,
+): Spec[] {
+  return list.map(([suit, rank]) => ({ kind, name, type, pack, suit, rank }))
 }
 
 function eq(
@@ -66,19 +113,24 @@ function eq(
   name: string,
   slot: NonNullable<CardDef['slot']>,
   pack: PackId,
-  attackRange: number | undefined,
-  count: number,
-): CardDef[] {
-  return Array.from({ length: count }, (_, i) => ({
-    id: `${pack}_${kind}_${i}`,
-    name,
-    type: 'equip' as const,
-    pack,
-    kind,
-    slot,
-    attackRange,
-  }))
+  suit: Suit,
+  rank: number,
+  attackRange?: number,
+): Spec {
+  return { kind, name, type: 'equip', pack, suit, rank, slot, attackRange }
 }
+
+export const CARD_DEFS: CardDef[] = SPECS.map((s, i) => ({
+  id: `${s.pack}_${s.kind}_${s.suit}_${s.rank}_${i}`,
+  name: s.name,
+  type: s.type,
+  pack: s.pack,
+  kind: s.kind,
+  suit: s.suit,
+  rank: s.rank,
+  slot: s.slot,
+  attackRange: s.attackRange,
+}))
 
 const byId = new Map(CARD_DEFS.map((c) => [c.id, c]))
 

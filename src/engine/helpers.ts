@@ -81,11 +81,14 @@ export function cardKind(card: CardInstance): string {
   return getCardDef(card.defId).kind
 }
 
-export function isRedCard(_card: CardInstance): boolean {
-  // Suits not fully modeled; treat half as red by uid hash for skill approximations
-  let h = 0
-  for (const ch of _card.uid) h = (h + ch.charCodeAt(0)) % 2
-  return h === 0
+export function isRedCard(card: CardInstance): boolean {
+  const suit = getCardDef(card.defId).suit
+  return suit === 'heart' || suit === 'diamond'
+}
+
+export function isBlackCard(card: CardInstance): boolean {
+  const suit = getCardDef(card.defId).suit
+  return suit === 'spade' || suit === 'club'
 }
 
 export function effectiveKind(player: PlayerState, card: CardInstance): string {
