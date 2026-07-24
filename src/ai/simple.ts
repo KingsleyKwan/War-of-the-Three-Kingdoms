@@ -1,4 +1,5 @@
 import {
+  activateSkill,
   endPlayPhase,
   getPlayKindOptions,
   passResponse,
@@ -8,6 +9,7 @@ import {
   selectTarget,
   clearPlayFx,
 } from '../engine/game'
+import { listSkillActions } from '../engine/skills'
 import { cardKind } from '../engine/helpers'
 import type { GameSnapshot } from '../engine/types'
 import { getCardDef } from '../data/cards'
@@ -64,6 +66,23 @@ function stepAi(state: GameSnapshot, playerId: number): void {
     if (id) resolveChoice(state, playerId, id)
     return
   }
+  if (prompt.kind === 'skill_cards') {
+    const need = prompt.minTargets ?? 1
+    const uids = [...(prompt.cardUids ?? [])]
+    const selected = prompt.selectedCardUids ?? []
+    if (selected.length < need && uids.length) {
+      const next = uids.find((u) => !selected.includes(u))
+      if (next) {
+        selectCard(state, playerId, next)
+        if ((state.prompt.selectedCardUids?.length ?? 0) >= need) {
+          resolveChoice(state, playerId, 'confirm')
+        }
+        return
+      }
+    }
+    resolveChoice(state, playerId, 'confirm')
+    return
+  }
   if (prompt.kind === 'respond_shan' || prompt.kind === 'respond_sha') {
     const uids = prompt.cardUids ?? []
     if (uids.length) selectCard(state, playerId, uids[0])
@@ -90,6 +109,25 @@ function stepAi(state: GameSnapshot, playerId: number): void {
   }
 
   if (prompt.kind === 'choose_card') {
+    const skills = listSkillActions(state, playerId)
+    const p = state.players[playerId]
+    if (skills.some((s) => s.id === 'zhiheng') && p.hand.length >= 4) {
+      activateSkill(state, playerId, 'zhiheng')
+      return
+    }
+    if (skills.some((s) => s.id === 'kurou') && p.hand.length <= 1 && p.hp > 1) {
+      activateSkill(state, playerId, 'kurou')
+      return
+    }
+    if (skills.some((s) => s.id === 'luoyi') && p.hand.some((c) => cardKind(c) === 'sha')) {
+      activateSkill(state, playerId, 'luoyi')
+      return
+    }
+    if (skills.some((s) => s.id === 'zhangba') && !p.hand.some((c) => cardKind(c) === 'sha')) {
+      activateSkill(state, playerId, 'zhangba')
+      return
+    }
+
     const cards = playableCards(state, playerId)
     const scored = cards
       .map((c) => ({ c, s: scorePlay(state, playerId, c.uid) }))
@@ -101,7 +139,6 @@ function stepAi(state: GameSnapshot, playerId: number): void {
     }
 
     const card = scored[0].c
-    const p = state.players[playerId]
     const opts = getPlayKindOptions(p, card)
     const prefer =
       opts.find((k) => k === 'sha') && scorePlay(state, playerId, card.uid, 'sha') >= scored[0].s
@@ -109,7 +146,6 @@ function stepAi(state: GameSnapshot, playerId: number): void {
         : opts[0]
     selectCard(state, playerId, card.uid, prefer)
 
-    // Target choice is same "move" — no extra delay here; next loop iteration delays
     if (state.prompt.kind === 'choose_target' && state.prompt.actorId === playerId) {
       stepAi(state, playerId)
     }
@@ -161,8 +197,14 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
   if (key === 'hanbing') {
     const tid = state.prompt.targetIds?.[0] ?? state.pending?.targetId
     const t = tid !== undefined ? state.players[tid] : null
-    // Prefer discard cards if target has stuff and isn't about to die from 1 dmg only when high value
-    if (t && (t.hand.length > 0 || t.equips.weapon || t.equips.armor || t.equips.horseMinus || t.equips.horsePlus)) {
+    if (
+      t &&
+      (t.hand.length > 0 ||
+        t.equips.weapon ||
+        t.equips.armor ||
+        t.equips.horseMinus ||
+        t.equips.horsePlus)
+    ) {
       return 'yes'
     }
     return 'no'
@@ -172,6 +214,15 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
   if (key === 'cixiong') {
     const p = state.players[playerId]
     return p.hand.length > 2 ? 'discard' : 'draw'
+  }
+  if (key === 'fangtian_confirm') return 'confirm'
+  if (key === 'liuli') return 'skip'
+  if (key === 'leiji') {
+    const hit = ids.find((id) => id !== 'skip')
+    return hit ?? 'skip'
+  }
+  if (key === 'rende_target' || key === 'zhangba_target') {
+    return ids[0] ?? null
   }
   return choices[0].id
 }

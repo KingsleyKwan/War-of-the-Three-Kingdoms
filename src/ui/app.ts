@@ -12,6 +12,7 @@ import { getGeneral } from '../data/generals'
 import { CARD_HELP, rankLabel, suitName, suitSymbol } from '../data/help'
 import { portraitDataUri } from '../data/portraits'
 import {
+  activateSkill,
   cancelTarget,
   clearPlayFx,
   confirmGeneralPick,
@@ -22,6 +23,7 @@ import {
   selectCard,
   selectTarget,
 } from '../engine/game'
+import { listSkillActions } from '../engine/skills'
 import { canReach, seatDistance } from '../engine/helpers'
 import type { GameSnapshot, GameMode, PlayerState, PlayFx } from '../engine/types'
 import { loadSettings, saveSettings, type AppSettings } from '../persist/settings'
@@ -450,7 +452,17 @@ function renderTable(): string {
         : prompt.message || '等待中…',
     )}</div>
     ${picking ? renderGeneralPickPanel(g) : ''}
-    ${!picking && prompt.kind === 'choice' ? renderChoicePanel(g) : ''}
+    ${!picking && (prompt.kind === 'choice' || prompt.kind === 'skill_cards') ? renderChoicePanel(g) : ''}
+    ${
+      !picking && isHumanTurn && prompt.kind === 'choose_card'
+        ? `<div class="skill-row">${listSkillActions(g, human.id)
+            .map(
+              (a) =>
+                `<button type="button" class="btn ghost" data-skill="${a.id}" title="${escapeHtml(a.hint)}">${escapeHtml(a.label)}</button>`,
+            )
+            .join('')}</div>`
+        : ''
+    }
     <div class="log">${[...g.log]
       .slice(-6)
       .map((l) => `<div>${escapeHtml(l.text)}</div>`)
@@ -468,8 +480,11 @@ function renderTable(): string {
             (prompt.kind === 'choose_card' ||
               prompt.kind === 'discard' ||
               prompt.kind === 'respond_shan' ||
-              prompt.kind === 'respond_sha')
-          const selected = app.selectedUid === c.uid
+              prompt.kind === 'respond_sha' ||
+              prompt.kind === 'skill_cards')
+          const selected =
+            app.selectedUid === c.uid ||
+            (prompt.kind === 'skill_cards' && !!prompt.selectedCardUids?.includes(c.uid))
           const red = def.suit === 'heart' || def.suit === 'diamond'
           return `<div class="card-wrap">
             <button type="button" class="card ${selectable ? 'selectable' : ''} ${selected ? 'selected' : ''} ${red ? 'red' : 'black'}" data-uid="${c.uid}" ${selectable ? '' : 'disabled'}>
@@ -500,7 +515,14 @@ function renderTable(): string {
           : ''
       }
       ${
-        !picking && isHumanTurn && prompt.kind === 'choose_target'
+        !picking &&
+        isHumanTurn &&
+        (prompt.kind === 'choose_target' ||
+          prompt.kind === 'skill_cards' ||
+          (prompt.kind === 'choice' &&
+            (prompt.choiceKey === 'fangtian_confirm' ||
+              prompt.choiceKey === 'rende_target' ||
+              prompt.choiceKey === 'zhangba_target')))
           ? `<button type="button" class="btn" id="cancel-tgt">取消</button>`
           : ''
       }
@@ -511,14 +533,18 @@ function renderTable(): string {
 
 function renderChoicePanel(g: GameSnapshot): string {
   const choices = g.prompt.choices ?? []
+  if (!choices.length) return ''
+  const skillPick = g.prompt.kind === 'skill_cards'
+  const selected = g.prompt.selectedCardUids?.length ?? 0
+  const min = g.prompt.minTargets ?? 1
   return `<div class="choice-panel">
     <h3>${escapeHtml(g.prompt.message)}</h3>
     <div class="choice-row">
       ${choices
-        .map(
-          (c) =>
-            `<button type="button" class="btn ${c.id === 'skip' || c.id === 'no' ? 'ghost' : 'primary'}" data-choice="${c.id}">${escapeHtml(c.label)}</button>`,
-        )
+        .map((c) => {
+          const disabled = skillPick && c.id === 'confirm' && selected < min
+          return `<button type="button" class="btn ${c.id === 'skip' || c.id === 'no' ? 'ghost' : 'primary'}" data-choice="${c.id}" ${disabled ? 'disabled' : ''}>${escapeHtml(c.label)}</button>`
+        })
         .join('')}
     </div>
   </div>`
@@ -762,9 +788,24 @@ function bindTable(): void {
 
   root().querySelectorAll('[data-choice]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      if (app.aiBusy || g.prompt.kind !== 'choice' || g.prompt.actorId !== human.id) return
+      if (
+        app.aiBusy ||
+        (g.prompt.kind !== 'choice' && g.prompt.kind !== 'skill_cards') ||
+        g.prompt.actorId !== human.id
+      )
+        return
       const id = (btn as HTMLElement).dataset.choice!
       resolveChoice(g, human.id, id)
+      void continueAi()
+    })
+  })
+
+  root().querySelectorAll('[data-skill]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (app.aiBusy || g.prompt.kind !== 'choose_card' || g.prompt.actorId !== human.id) return
+      const id = (btn as HTMLElement).dataset.skill!
+      activateSkill(g, human.id, id)
+      app.selectedUid = null
       void continueAi()
     })
   })
@@ -821,6 +862,12 @@ function bindTable(): void {
         selectCard(g, human.id, uid)
         app.selectedUid = null
         void continueAi()
+        return
+      }
+      // Skill multi-card pick: toggle selection
+      if (g.prompt.kind === 'skill_cards') {
+        selectCard(g, human.id, uid)
+        render()
         return
       }
       // Responses / discard: single click

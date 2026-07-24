@@ -17,7 +17,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['fankui', 'guicai'],
-    skillText: '反饋／鬼才（簡化：受傷摸一張）。',
+    skillText: '反饋：受到傷害後，可獲得傷害來源的一張牌。鬼才（未完整）。',
   },
   {
     id: 'xiahoudun',
@@ -26,7 +26,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['ganglie'],
-    skillText: '剛烈（簡化：受傷對來源造成1點傷害，50%）。',
+    skillText: '剛烈：受到傷害後判定，非紅桃則來源棄兩張牌或受到1點傷害。',
   },
   {
     id: 'zhangliao',
@@ -35,7 +35,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['tuxi'],
-    skillText: '突襲（簡化：出牌階段可多出一張殺）。',
+    skillText: '突襲：摸牌階段可少摸一張並獲得一名其他角色的一張手牌。',
   },
   {
     id: 'xuchu',
@@ -44,7 +44,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['luoyi'],
-    skillText: '裸衣（簡化：殺傷害+1，本回合不能用錦囊）。',
+    skillText: '裸衣：棄兩張牌，本回合殺傷害+1且不能使用錦囊。',
   },
   {
     id: 'guojia',
@@ -53,7 +53,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['tiandu', 'yiji'],
-    skillText: '天妒／遺計（簡化：回合開始多摸一張）。',
+    skillText: '天妒：判定牌生效後可獲得之。遺計（未完整）。',
   },
   {
     id: 'zhenji',
@@ -62,7 +62,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'female',
     skills: ['luoshen', 'qingguo'],
-    skillText: '洛神／傾國（簡化：黑色手牌可當閃）。',
+    skillText: '洛神：準備階段判定黑色則獲得判定牌，可重複至紅色。傾國：黑色牌可當閃。',
   },
   {
     id: 'liubei',
@@ -71,7 +71,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['rende'],
-    skillText: '仁德（簡化：出牌階段可回1體力，限一次）。',
+    skillText: '仁德：出牌階段可將手牌交給其他角色；本回合交出兩張或以上時回1體力。',
   },
   {
     id: 'guanyu',
@@ -116,7 +116,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['mashu', 'tieqi'],
-    skillText: '馬術：計算與其他角色距離-1。',
+    skillText: '馬術：距離-1。鐵騎：使用殺指定目標後判定，紅色則其不能出閃。',
   },
   {
     id: 'huangyueying',
@@ -125,7 +125,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'female',
     skills: ['jizhi', 'qicai'],
-    skillText: '集智（簡化：使用錦囊後摸一張）。',
+    skillText: '集智：使用錦囊後摸一張。',
   },
   {
     id: 'sunquan',
@@ -134,7 +134,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['zhiheng'],
-    skillText: '制衡（簡化：棄任意張摸等量，每回合一次）。',
+    skillText: '制衡：出牌階段限一次，棄任意張牌摸等量的牌。',
   },
   {
     id: 'ganning',
@@ -161,7 +161,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['kurou'],
-    skillText: '苦肉（簡化：失1體力摸兩張）。',
+    skillText: '苦肉：失去1點體力，摸兩張牌。',
   },
   {
     id: 'zhouyu',
@@ -170,7 +170,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['yingzi', 'fanjian'],
-    skillText: '英姿：摸牌階段多摸一張。',
+    skillText: '英姿：摸牌階段多摸一張。反間（未完整）。',
   },
   {
     id: 'daqiao',
@@ -179,7 +179,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'female',
     skills: ['guose', 'liuli'],
-    skillText: '國色／流離（簡化：可多棄一張）。',
+    skillText: '流離：成為殺的目標時可棄一張牌將殺轉移。國色（未完整）。',
   },
   {
     id: 'luxun',
@@ -188,7 +188,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['qianxun', 'lianying'],
-    skillText: '謙遜／連營（簡化：失去最後手牌摸一張）。',
+    skillText: '連營：失去最後的手牌時摸一張。謙遜（未完整）。',
   },
   {
     id: 'sunshangxiang',
@@ -215,7 +215,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['wushuang'],
-    skillText: '無雙（簡化：殺需兩張閃）。',
+    skillText: '無雙：你使用的殺需兩張閃才能抵消。',
   },
   {
     id: 'diaochan',
@@ -224,7 +224,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'female',
     skills: ['lijian', 'biyue'],
-    skillText: '閉月：結束階段摸一張。',
+    skillText: '閉月：結束階段摸一張。離間（未完整）。',
   },
   {
     id: 'zhangjiao',
@@ -233,7 +233,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['leiji', 'guidao'],
-    skillText: '雷擊（簡化：使用閃後可對一名角色造成1雷電傷害）。',
+    skillText: '雷擊：使用閃後可令一名角色判定，黑色則受到2點雷電傷害。',
   },
   {
     id: 'huaxiong',

@@ -50,6 +50,12 @@ export interface PlayerState {
   equips: Partial<Record<EquipSlot, CardInstance>>
   alive: boolean
   shaUsedThisTurn: boolean
+  /** 裸衣：本回合殺傷害+1且不能用錦囊 */
+  luoyiActive?: boolean
+  /** 制衡每回合限一次 */
+  zhihengUsed?: boolean
+  /** 仁德本回合已交出的牌數 */
+  rendeCount?: number
   /** Temporary flags */
   skipNextShaLimit?: boolean
 }
@@ -63,6 +69,7 @@ export type PromptKind =
   | 'respond_sha'
   | 'discard'
   | 'choice'
+  | 'skill_cards'
   | 'game_over'
 
 export interface ChoiceOption {
@@ -90,6 +97,11 @@ export interface PromptState {
   choices?: ChoiceOption[]
   /** Opaque context for resolveChoice */
   choiceKey?: string
+  /** Accumulated targets (方天畫戟) */
+  selectedTargetIds?: number[]
+  /** Skill multi-card pick (丈八 / 制衡 / 仁德) */
+  skillId?: string
+  selectedCardUids?: string[]
 }
 
 export interface LogEntry {
@@ -163,5 +175,15 @@ export interface GameSnapshot {
     sourceId: number
     targetId: number
     cardUid: string
+    /** 無雙：尚需閃的次數 */
+    shanNeeded?: number
+    /** 鐵騎：不可出閃 */
+    skipShan?: boolean
+    /** 造成傷害的牌（奸雄） */
+    damageCard?: CardInstance
+    /** 方天多目標佇列 */
+    extraTargets?: number[]
   }
+  /** 火屬性標記（火攻等） */
+  _damageNature?: 'normal' | 'fire' | 'thunder'
 }

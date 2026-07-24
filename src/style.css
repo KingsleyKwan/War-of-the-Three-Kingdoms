@@ -841,6 +841,13 @@ input {
   gap: 0.5rem;
 }
 
+.skill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0.15rem;
+}
+
 .field input[type='range'] {
   width: 100%;
   accent-color: var(--lacquer);
