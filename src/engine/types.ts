@@ -20,6 +20,8 @@ export interface CardDef {
   attackRange?: number
   /** Basic/trick kind key used by engine */
   kind: string
+  /** Damage nature for 殺 variants (火殺 / 雷殺) */
+  damageNature?: 'normal' | 'fire' | 'thunder'
 }
 
 export interface CardInstance {
@@ -35,6 +37,8 @@ export interface GeneralDef {
   gender: 'male' | 'female'
   skills: string[]
   skillText: string
+  /** Expansion pack that owns this general */
+  pack: PackId
 }
 
 export interface PlayerState {
@@ -131,6 +135,8 @@ export interface VictoryRule {
 export interface MatchConfig {
   mode: GameMode
   packs: PackId[]
+  /** Guarantee these card kinds appear in the shuffled deck */
+  requiredCardKinds?: string[]
   humanSeat: number
   players: Array<{
     name: string

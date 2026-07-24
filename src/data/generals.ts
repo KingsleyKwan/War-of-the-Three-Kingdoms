@@ -1,4 +1,4 @@
-import type { GeneralDef } from '../engine/types'
+import type { GeneralDef, PackId } from '../engine/types'
 
 export const GENERALS: GeneralDef[] = [
   {
@@ -8,6 +8,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['jianxiong'],
+    pack: 'standard',
     skillText: '奸雄：受到傷害後，可獲得造成傷害的牌。',
   },
   {
@@ -17,6 +18,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['fankui', 'guicai'],
+    pack: 'standard',
     skillText: '反饋：受到傷害後，可選擇獲得傷害來源的一張牌。鬼才（未完整）。',
   },
   {
@@ -26,6 +28,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['ganglie'],
+    pack: 'standard',
     skillText: '剛烈：受到傷害後判定，非紅桃則來源須棄兩張牌（自選）或受到1點傷害。',
   },
   {
@@ -35,6 +38,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['tuxi'],
+    pack: 'standard',
     skillText: '突襲：摸牌階段可少摸一張並獲得一名其他角色的一張手牌。',
   },
   {
@@ -44,6 +48,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['luoyi'],
+    pack: 'standard',
     skillText: '裸衣：棄兩張牌，本回合殺傷害+1且不能使用錦囊。',
   },
   {
@@ -53,6 +58,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['tiandu', 'yiji'],
+    pack: 'standard',
     skillText: '天妒：判定牌生效後可獲得之。遺計：每受到1點傷害後摸兩張牌。',
   },
   {
@@ -62,6 +68,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'female',
     skills: ['luoshen', 'qingguo'],
+    pack: 'standard',
     skillText: '洛神：準備階段判定黑色則獲得判定牌，可重複至紅色。傾國：黑色牌可當閃。',
   },
   {
@@ -71,6 +78,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['rende'],
+    pack: 'standard',
     skillText: '仁德：出牌階段可將手牌交給其他角色；本回合交出兩張或以上時回1體力。',
   },
   {
@@ -80,6 +88,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['wusheng'],
+    pack: 'standard',
     skillText: '武聖（簡化：紅色手牌可當殺）。',
   },
   {
@@ -89,6 +98,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['paoxiao'],
+    pack: 'standard',
     skillText: '咆哮：出牌階段可使用任意張殺。',
   },
   {
@@ -98,6 +108,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['guanxing', 'kongcheng'],
+    pack: 'standard',
     skillText: '空城：手牌為0時不能成為殺的目標。觀星（未實裝）。',
   },
   {
@@ -107,6 +118,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['longdan'],
+    pack: 'standard',
     skillText: '龍膽（簡化：殺可當閃，閃可當殺）。',
   },
   {
@@ -116,6 +128,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['mashu', 'tieqi'],
+    pack: 'standard',
     skillText: '馬術：距離-1。鐵騎：使用殺指定目標後判定，紅色則其不能出閃。',
   },
   {
@@ -125,6 +138,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'female',
     skills: ['jizhi', 'qicai'],
+    pack: 'standard',
     skillText: '集智：使用錦囊後摸一張。奇才：錦囊無距離限制。',
   },
   {
@@ -134,6 +148,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['zhiheng'],
+    pack: 'standard',
     skillText: '制衡：出牌階段限一次，棄任意張牌摸等量的牌。',
   },
   {
@@ -143,6 +158,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['qixi'],
+    pack: 'standard',
     skillText: '奇襲（簡化：黑色牌可當過河拆橋）。',
   },
   {
@@ -152,6 +168,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['keji'],
+    pack: 'standard',
     skillText: '克己：若未出殺，跳過棄牌階段。',
   },
   {
@@ -161,6 +178,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['kurou'],
+    pack: 'standard',
     skillText: '苦肉：失去1點體力，摸兩張牌。',
   },
   {
@@ -170,6 +188,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['yingzi', 'fanjian'],
+    pack: 'standard',
     skillText: '英姿：摸牌階段多摸一張。反間（未完整）。',
   },
   {
@@ -179,6 +198,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'female',
     skills: ['guose', 'liuli'],
+    pack: 'standard',
     skillText: '流離：成為殺的目標時可棄一張牌將殺轉移。國色（未完整）。',
   },
   {
@@ -188,6 +208,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['qianxun', 'lianying'],
+    pack: 'standard',
     skillText: '謙遜：不能成為順手牽羊、樂不思蜀的目標。連營：失去最後的手牌時摸一張。',
   },
   {
@@ -197,6 +218,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'female',
     skills: ['jieyin', 'xiaoji'],
+    pack: 'standard',
     skillText: '梟姬：失去裝備時摸兩張。',
   },
   {
@@ -206,6 +228,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['jijiu', 'qingnang'],
+    pack: 'standard',
     skillText: '急救（簡化：紅牌可當桃）。',
   },
   {
@@ -215,6 +238,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: ['wushuang'],
+    pack: 'standard',
     skillText: '無雙：你使用的殺需兩張閃才能抵消。',
   },
   {
@@ -224,6 +248,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'female',
     skills: ['lijian', 'biyue'],
+    pack: 'standard',
     skillText: '閉月：結束階段摸一張。離間（未完整）。',
   },
   {
@@ -233,6 +258,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: ['leiji', 'guidao'],
+    pack: 'standard',
     skillText:
       '雷擊：使用閃後可令一名角色判定，黑色則受到2點雷電傷害。隊友不應攻擊張角；有手牌時敵人攻擊他需小心雷擊。',
   },
@@ -243,6 +269,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 6,
     gender: 'male',
     skills: [],
+    pack: 'standard',
     skillText: '關卡敵將。',
   },
   {
@@ -252,6 +279,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: [],
+    pack: 'standard',
     skillText: '關卡敵將。',
   },
   {
@@ -261,6 +289,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 4,
     gender: 'male',
     skills: [],
+    pack: 'standard',
     skillText: '關卡敵將。',
   },
   {
@@ -270,6 +299,7 @@ export const GENERALS: GeneralDef[] = [
     maxHp: 3,
     gender: 'male',
     skills: [],
+    pack: 'standard',
     skillText: '普通士兵。',
   },
 ]
@@ -282,6 +312,12 @@ export function getGeneral(id: string): GeneralDef {
   return g
 }
 
-export function listGeneralsForPick(): GeneralDef[] {
-  return GENERALS.filter((g) => !['soldier', 'huaxiong', 'zhangxiu', 'yuanshao'].includes(g.id))
+export function listGeneralsForPick(packs?: PackId[]): GeneralDef[] {
+  const exclude = new Set(['soldier', 'huaxiong', 'zhangxiu', 'yuanshao'])
+  const packSet = packs?.length ? new Set(packs) : null
+  return GENERALS.filter((g) => {
+    if (exclude.has(g.id)) return false
+    if (packSet && !packSet.has(g.pack)) return false
+    return true
+  })
 }

@@ -1,5 +1,6 @@
 import type { GameSnapshot, Identity, MatchConfig, PackId, VictoryRule } from '../../engine/types'
-import { listGeneralsForPick } from '../generals'
+import { getGeneral, listGeneralsForPick } from '../generals'
+import { normalizePacks } from '../packs'
 import type { MapMovement } from './map'
 
 export interface CampaignStage {
@@ -27,7 +28,13 @@ export interface CampaignStage {
   epilogueLose: string
   /** After a win, tease the next stage */
   bridgeNext?: string
+  /**
+   * Theme packs for this battlefield (unioned with packs of featured generals).
+   * Standard is always included. Example: 赤壁 → 軍爭 for 火殺／鐵索.
+   */
   packs: PackId[]
+  /** Guarantee these card kinds / names appear in the deck */
+  requiredCardKinds?: string[]
   /** Player is always 曹操 unless overridden */
   playerGeneralId: string
   allies: Array<{ generalId: string; name?: string }>
@@ -136,7 +143,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     epilogueLose:
       '濮陽失守，煙塵吞沒城門。曹操敗走，典韋許褚死戰殿後的喊聲猶在耳中。\n兖州若盡失，曹操傳之路，將更坎坷。',
     bridgeNext: '兖州稍定，曹操南征張繡。宛城風光雖好，卻暗藏殺機——賈詡之計，尚在城中。',
-    packs: ['standard', 'ex'],
+    packs: ['standard'],
     playerGeneralId: 'caocao',
     allies: [{ generalId: 'xuchu' }],
     allyChoices: ['zhangliao', 'guojia', 'xiahoudun'],
@@ -174,7 +181,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     epilogueLose:
       '夜襲得手，曹營大亂。曹操倉皇突圍，身後是燃燒的旗幟與未竟的南征。\n若宛城之恥不雪，許昌亦難安枕。',
     bridgeNext: '北方袁紹勢力日盛，官渡一線遲早一戰。曹操收攏兵馬，目光轉向河北。',
-    packs: ['standard', 'ex'],
+    packs: ['standard'],
     playerGeneralId: 'caocao',
     allies: [{ generalId: 'dianwei_proxy', name: '典韋' }],
     allyChoices: ['xuchu', 'xiahoudun', 'guojia'],
@@ -254,6 +261,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
       '東風起，連營火。樓船傾覆，北軍大潰。曹操敗走華容道方向，衣甲盡濕。\n赤壁一敗，南北對峙之局就此定下。',
     bridgeNext: '曹操傳暫告一段落。亂世未盡，更多關卡將隨後續擴充而至。',
     packs: ['standard', 'ex'],
+    requiredCardKinds: ['火殺', 'tiesuo'],
     playerGeneralId: 'caocao',
     allies: [{ generalId: 'xuchu' }],
     allyChoices: ['zhangliao', 'xiahoudun', 'guojia'],
@@ -276,6 +284,25 @@ const CHOICE_ALIAS: Record<string, string> = {
 
 export function resolveGeneralId(id: string): string {
   return CHOICE_ALIAS[id] ?? id
+}
+
+/** Theme packs + packs of every general featured on this stage */
+export function resolveStagePacks(stage: CampaignStage): PackId[] {
+  const ids = new Set<string>([stage.playerGeneralId])
+  for (const a of stage.allies) ids.add(a.generalId)
+  for (const id of stage.allyChoices ?? []) ids.add(id)
+  for (const e of stage.enemies) ids.add(e.generalId)
+
+  const packs: PackId[] = [...stage.packs]
+  for (const rawId of ids) {
+    try {
+      const g = getGeneral(resolveGeneralId(rawId))
+      packs.push(g.pack)
+    } catch {
+      /* ignore unknown until resolved */
+    }
+  }
+  return normalizePacks(packs)
 }
 
 const PROGRESS_KEY = 'wtk_caocao_progress'
@@ -339,7 +366,8 @@ export function buildStageMatch(
 
   return {
     mode: 'duel',
-    packs: stage.packs,
+    packs: resolveStagePacks(stage),
+    requiredCardKinds: stage.requiredCardKinds,
     humanSeat: 0,
     players,
     victory: stage.victory,
@@ -417,12 +445,12 @@ export function buildStageEpilogue(stage: CampaignStage, game: GameSnapshot): st
 
 export function buildFreeMatch(opts: {
   mode: 'duel' | 'identity5' | 'identity8'
-  useEx: boolean
+  packs: PackId[]
   /** If true, offer full general list; else random 3 */
   forceSelectGeneral: boolean
 }): MatchConfig {
-  const packs: PackId[] = opts.useEx ? ['standard', 'ex'] : ['standard']
-  const allIds = listGeneralsForPick().map((g) => g.id)
+  const packs = normalizePacks(opts.packs)
+  const allIds = listGeneralsForPick(packs).map((g) => g.id)
   const offeredGenerals = opts.forceSelectGeneral
     ? allIds
     : [...allIds].sort(() => Math.random() - 0.5).slice(0, 3)

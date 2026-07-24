@@ -9,6 +9,7 @@ type Spec = {
   rank: number
   slot?: CardDef['slot']
   attackRange?: number
+  damageNature?: 'normal' | 'fire' | 'thunder'
 }
 
 /** Cards with explicit 花色 / 點數 for skill conditions */
@@ -84,6 +85,11 @@ const SPECS: Spec[] = [
   ...spread('tiesuo', '鐵索連環', 'trick', 'ex', [
     ['spade', 11], ['spade', 12], ['club', 10],
   ]),
+  // 火殺（軍爭；赤壁等關卡主題）
+  ...spreadNature('sha', '火殺', 'basic', 'ex', 'fire', [
+    ['heart', 4], ['heart', 7], ['heart', 10],
+    ['diamond', 4], ['diamond', 5],
+  ]),
   ...spread('bingliang', '兵糧寸斷', 'trick', 'ex', [
     ['spade', 10], ['club', 4],
   ]),
@@ -108,6 +114,17 @@ function spread(
   return list.map(([suit, rank]) => ({ kind, name, type, pack, suit, rank }))
 }
 
+function spreadNature(
+  kind: string,
+  name: string,
+  type: CardDef['type'],
+  pack: PackId,
+  damageNature: 'fire' | 'thunder',
+  list: Array<[Suit, number]>,
+): Spec[] {
+  return list.map(([suit, rank]) => ({ kind, name, type, pack, suit, rank, damageNature }))
+}
+
 function eq(
   kind: string,
   name: string,
@@ -130,6 +147,7 @@ export const CARD_DEFS: CardDef[] = SPECS.map((s, i) => ({
   rank: s.rank,
   slot: s.slot,
   attackRange: s.attackRange,
+  damageNature: s.damageNature,
 }))
 
 const byId = new Map(CARD_DEFS.map((c) => [c.id, c]))
@@ -140,7 +158,23 @@ export function getCardDef(id: string): CardDef {
   return d
 }
 
-export function buildDeck(packs: PackId[]): CardDef[] {
+export function buildDeck(
+  packs: PackId[],
+  opts?: { requiredKinds?: string[] },
+): CardDef[] {
   const set = new Set(packs)
-  return CARD_DEFS.filter((c) => set.has(c.pack))
+  const deck = CARD_DEFS.filter((c) => set.has(c.pack))
+  const required = opts?.requiredKinds ?? []
+  if (!required.length) return deck
+
+  const out = [...deck]
+  const has = (key: string) => out.some((c) => c.kind === key || c.name === key)
+  for (const key of required) {
+    if (has(key)) continue
+    for (const c of CARD_DEFS) {
+      if (c.kind !== key && c.name !== key) continue
+      if (!out.some((d) => d.id === c.id)) out.push(c)
+    }
+  }
+  return out
 }

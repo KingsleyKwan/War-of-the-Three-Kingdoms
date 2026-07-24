@@ -7,12 +7,14 @@ import {
   buildStageMatch,
   CAOCAO_STAGES,
   loadCampaignProgress,
+  resolveStagePacks,
   unlockNextStage,
   type CampaignStage,
 } from '../data/campaigns/caocao'
 import { renderCampaignMap } from '../data/campaigns/map'
 import { getGeneral } from '../data/generals'
 import { CARD_HELP, rankLabel, suitName, suitSymbol } from '../data/help'
+import { formatPackList, PACK_DEFS } from '../data/packs'
 import { portraitDataUri } from '../data/portraits'
 import {
   activateSkill,
@@ -37,7 +39,6 @@ type Screen = 'start' | 'setup' | 'settings' | 'story' | 'stage' | 'table' | 'ep
 interface AppState {
   screen: Screen
   setupMode: GameMode
-  useEx: boolean
   stage: CampaignStage | null
   allyChoice: string | null
   game: GameSnapshot | null
@@ -56,7 +57,6 @@ interface AppState {
 const app: AppState = {
   screen: 'start',
   setupMode: 'duel',
-  useEx: false,
   stage: null,
   allyChoice: null,
   game: null,
@@ -191,6 +191,19 @@ function renderSettings(): string {
         <span>對局內可選全部武將（關閉則隨機三選一）</span>
       </label>
       <hr class="settings-sep" />
+      <h3 class="settings-sub">卡包（自由對戰）</h3>
+      <p class="hint">預設僅標準包。劇情模式會依關卡與登場武將自動啟用對應卡包。</p>
+      <div class="pack-list">
+        ${PACK_DEFS.map((p) => {
+          const on = s.enabledPacks.includes(p.id)
+          const locked = !!p.alwaysOn
+          return `<label class="field check">
+            <input type="checkbox" data-pack="${p.id}" ${on ? 'checked' : ''} ${locked ? 'disabled' : ''} />
+            <span><strong>${p.name}</strong> — ${p.hint}${locked ? '（固定）' : ''}</span>
+          </label>`
+        }).join('')}
+      </div>
+      <hr class="settings-sep" />
       <h3 class="settings-sub">進階 AI（選填）</h3>
       <p class="hint">填入 OpenAI 相容 API Token 後，每位電腦座位會用大模型依「自己所知」決策；留空則使用內建規則 AI。</p>
       <label class="field">
@@ -226,10 +239,16 @@ function bindSettings(): void {
     render()
   })
   root().querySelector('#save-settings')?.addEventListener('click', () => {
+    const enabledPacks = PACK_DEFS.filter((p) => {
+      if (p.alwaysOn) return true
+      const el = root().querySelector(`[data-pack="${p.id}"]`) as HTMLInputElement | null
+      return !!el?.checked
+    }).map((p) => p.id)
     app.settings = {
       thinkDelayMs: Number(range.value),
       showPortraits: (root().querySelector('#show-portraits') as HTMLInputElement).checked,
       forceSelectGeneral: (root().querySelector('#force-select') as HTMLInputElement).checked,
+      enabledPacks,
       aiApiToken: (root().querySelector('#ai-token') as HTMLInputElement).value.trim(),
       aiApiBaseUrl:
         (root().querySelector('#ai-base') as HTMLInputElement).value.trim() ||
@@ -260,11 +279,8 @@ function renderSetup(): string {
           <option value="identity8" ${app.setupMode === 'identity8' ? 'selected' : ''}>八人身份局</option>
         </select>
       </label>
-      <label class="field check">
-        <input type="checkbox" id="ex" ${app.useEx ? 'checked' : ''} />
-        <span>啟用卡包：軍爭（EX）</span>
-      </label>
-      <p class="hint">標準包固定啟用。進入對局後會先看到座位與身份，再從系統隨機抽出的三名武將中選擇（可在設定改為全部可選）。</p>
+      <p class="hint">卡包：${formatPackList(app.settings.enabledPacks)}（可在設定中變更；預設僅標準包）</p>
+      <p class="hint">進入對局後會先看到座位與身份，再從系統隨機抽出的三名武將中選擇（可在設定改為全部可選）。</p>
       <button type="button" class="btn primary" id="start-match">開始對戰</button>
     </div>
   </div>`
@@ -286,12 +302,10 @@ function bindSetup(): void {
 
 async function startFreeMatch(): Promise<void> {
   const mode = (root().querySelector('#mode') as HTMLSelectElement).value as GameMode
-  const useEx = (root().querySelector('#ex') as HTMLInputElement).checked
   app.setupMode = mode
-  app.useEx = useEx
   const config = buildFreeMatch({
     mode,
-    useEx,
+    packs: app.settings.enabledPacks,
     forceSelectGeneral: app.settings.forceSelectGeneral,
   })
   app.game = createMatch(config)
@@ -394,7 +408,13 @@ function renderStageBrief(): string {
     </section>
     <section class="intel-block">
       <h4>關卡設定</h4>
-      <p class="intel-pack">卡包：${s.packs.includes('ex') ? '標準 + 軍爭' : '標準包'}</p>
+      <p class="intel-pack">卡包：${formatPackList(resolveStagePacks(s))}${
+        s.requiredCardKinds?.length
+          ? `　·　必備：${s.requiredCardKinds
+              .map((k) => (k === 'tiesuo' ? '鐵索連環' : k))
+              .join('、')}`
+          : ''
+      }</p>
       <p class="intel-pack">勝利：${
         s.victory.type === 'kill_target'
           ? `擊殺 ${getGeneral(s.victory.targetGeneralId!).name}`

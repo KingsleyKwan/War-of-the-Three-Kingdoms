@@ -79,7 +79,7 @@ export function clearPlayFx(state: GameSnapshot): void {
 
 export function createMatch(config: MatchConfig): GameSnapshot {
   uidSeq = 1
-  const defs = buildDeck(config.packs)
+  const defs = buildDeck(config.packs, { requiredKinds: config.requiredCardKinds })
   const deck: CardInstance[] = shuffle(defs.map((d) => ({ uid: nextUid(), defId: d.id })))
 
   const defer = !!config.deferGeneralPick
@@ -1603,7 +1603,11 @@ function applyShaDamage(
   const extras = pending?.type === 'sha' ? pending.extraTargets ?? [] : []
   const cardUid = pending?.type === 'sha' ? pending.cardUid : ''
   const damageCard = pending?.type === 'sha' ? pending.damageCard : undefined
-  dealDamage(state, targetId, damage, sourceId, 'normal', damageCard)
+  const nature =
+    damageCard?.defId && getCardDef(damageCard.defId).damageNature
+      ? getCardDef(damageCard.defId).damageNature!
+      : 'normal'
+  dealDamage(state, targetId, damage, sourceId, nature, damageCard)
   delete (state as GameSnapshot & { _shaDamage?: number })._shaDamage
   if (state.winnerIds) {
     state.pending = undefined
