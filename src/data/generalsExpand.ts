@@ -83,9 +83,10 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wei',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['qiangxi'],
     pack: 'fire',
-    skillText: '強襲（未完整）。',
+    skillText:
+      '強襲：出牌階段限一次，你可以失去1點體力或棄置一張武器牌，對攻擊範圍內一名其他角色造成1點傷害。',
   },
   {
     id: 'xunyu',
@@ -95,7 +96,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['jieming'],
     pack: 'fire',
-    skillText: '節命：受到傷害後，令一名角色摸X張（X為其已損失體力，至少1）。驅虎（未完整）。',
+    skillText: '節命：受到傷害後，令一名角色摸X張（X為其已損失體力，至少1）。',
   },
   {
     id: 'pangtong',

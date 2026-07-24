@@ -20,7 +20,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['fankui', 'guicai'],
     pack: 'standard',
-    skillText: '反饋：受到傷害後，可選擇獲得傷害來源的一張牌。鬼才（未完整）。',
+    skillText: '反饋：受到傷害後，可選擇獲得傷害來源的一張牌。鬼才：判定時可用手牌替換判定牌。',
   },
   {
     id: 'xiahoudun',
@@ -110,7 +110,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['guanxing', 'kongcheng'],
     pack: 'standard',
-    skillText: '空城：手牌為0時不能成為殺的目標。觀星（未實裝）。',
+    skillText: '觀星：準備階段觀看牌堆頂並調整。空城：手牌為0時不能成為殺的目標。',
   },
   {
     id: 'zhaoyun',
@@ -190,7 +190,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['yingzi', 'fanjian'],
     pack: 'standard',
-    skillText: '英姿：摸牌階段多摸一張。反間（未完整）。',
+    skillText: '英姿：摸牌階段多摸一張。反間：出牌階段限一次，交一張牌令其猜花色，猜錯則受傷。',
   },
   {
     id: 'daqiao',
@@ -200,7 +200,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'female',
     skills: ['guose', 'liuli'],
     pack: 'standard',
-    skillText: '流離：成為殺的目標時可棄一張牌將殺轉移。國色（未完整）。',
+    skillText: '國色：方塊牌可當樂不思蜀。流離：成為殺的目標時可棄一張牌將殺轉移。',
   },
   {
     id: 'luxun',
@@ -220,7 +220,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'female',
     skills: ['jieyin', 'xiaoji'],
     pack: 'standard',
-    skillText: '梟姬：失去裝備時摸兩張。',
+    skillText: '結姻：棄兩張牌令自己與一名男性各回1體力。梟姬：失去裝備時摸兩張。',
   },
   {
     id: 'huatuo',
@@ -230,7 +230,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['jijiu', 'qingnang'],
     pack: 'standard',
-    skillText: '急救（簡化：紅牌可當桃）。',
+    skillText: '急救：紅牌可當桃。青囊：棄一張牌令一名角色回1體力。',
   },
   {
     id: 'lvbu',
@@ -250,7 +250,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'female',
     skills: ['lijian', 'biyue'],
     pack: 'standard',
-    skillText: '閉月：結束階段摸一張。離間（未完整）。',
+    skillText: '離間：棄一張牌令兩名男性決鬥。閉月：結束階段摸一張。',
   },
   {
     id: 'zhangjiao',
@@ -261,7 +261,7 @@ export const GENERALS: GeneralDef[] = [
     skills: ['leiji', 'guidao'],
     pack: 'standard',
     skillText:
-      '雷擊：使用閃後可令一名角色判定，黑色則受到2點雷電傷害。隊友不應攻擊張角；有手牌時敵人攻擊他需小心雷擊。',
+      '雷擊：使用閃後可令一名角色判定，黑色則受到2點雷電傷害。鬼道：判定時可用黑色手牌替換判定牌。',
   },
   {
     id: 'huaxiong',

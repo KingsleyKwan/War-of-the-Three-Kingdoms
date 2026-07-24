@@ -306,8 +306,126 @@ function beginTurn(state: GameSnapshot): void {
   p.shaUsedThisTurn = false
   p.luoyiActive = false
   p.zhihengUsed = false
+  p.qiangxiUsed = false
+  p.qingnangUsed = false
+  p.jieyinUsed = false
+  p.lijianUsed = false
+  p.fanjianUsed = false
   p.rendeCount = 0
 
+  const skills = getGeneral(p.generalId).skills
+
+  // 觀星：準備階段觀看牌堆頂並調整
+  if (skills.includes('guanxing')) {
+    const n = Math.min(
+      5,
+      Math.max(1, state.players.filter((x) => x.alive).length),
+    )
+    const peeked: CardInstance[] = []
+    for (let i = 0; i < n; i++) {
+      if (state.deck.length === 0) {
+        if (state.discard.length === 0) break
+        state.deck = shuffle(state.discard)
+        state.discard = []
+      }
+      const c = state.deck.pop()
+      if (c) peeked.push(c)
+    }
+    if (peeked.length) {
+      ;(state as GameSnapshot & { _guanxing?: CardInstance[] })._guanxing = peeked
+      const names = peeked.map((c) => getCardDef(c.defId).name).join('、')
+      state.prompt = {
+        kind: 'choice',
+        message: `【觀星】牌堆頂：${names}`,
+        actorId: p.id,
+        choiceKey: 'guanxing',
+        choices: [
+          { id: 'keep', label: '按此順序放回牌堆頂' },
+          { id: 'reverse', label: '反轉後放回牌堆頂' },
+          { id: 'bottom', label: '全部置於牌堆底' },
+        ],
+      }
+      return
+    }
+  }
+
+  continueBeginTurn(state)
+}
+
+function finishGuanxing(state: GameSnapshot, mode: 'keep' | 'reverse' | 'bottom'): void {
+  const peeked =
+    (state as GameSnapshot & { _guanxing?: CardInstance[] })._guanxing ?? []
+  delete (state as GameSnapshot & { _guanxing?: CardInstance[] })._guanxing
+  const p = state.players[state.currentPlayer]
+  let ordered = [...peeked]
+  if (mode === 'reverse') ordered = ordered.reverse()
+  if (mode === 'bottom') {
+    state.deck = [...ordered, ...state.deck]
+    log(state, `${p.name} 發動觀星，將 ${ordered.length} 張牌置於牌堆底。`)
+  } else {
+    for (let i = ordered.length - 1; i >= 0; i--) {
+      state.deck.push(ordered[i])
+    }
+    log(
+      state,
+      `${p.name} 發動觀星，將 ${ordered.length} 張牌${mode === 'reverse' ? '反轉後' : ''}放回牌堆頂。`,
+    )
+  }
+  continueBeginTurn(state)
+}
+
+/** 鬼才／鬼道：有對應花色手牌時替換判定牌（鬼道限黑色）。 */
+type JudgePrefer = 'red' | 'black' | 'heart' | 'club' | 'nonheart'
+
+function applyJudgeReplaceSync(
+  state: GameSnapshot,
+  judged: CardInstance | null,
+  prefer?: JudgePrefer,
+): CardInstance | null {
+  if (!judged || !prefer) return judged
+  const n = state.players.length
+  for (let i = 0; i < n; i++) {
+    const seat = (state.currentPlayer + i) % n
+    const pl = state.players[seat]
+    if (!pl.alive || !pl.generalId) continue
+    const sk = getGeneral(pl.generalId).skills
+    const hasGuicai = sk.includes('guicai')
+    const hasGuidao = sk.includes('guidao')
+    if (!hasGuicai && !hasGuidao) continue
+
+    const cand = pl.hand.find((c) => {
+      const s = getCardDef(c.defId).suit
+      const red = s === 'heart' || s === 'diamond'
+      let match = false
+      if (prefer === 'red') match = red
+      else if (prefer === 'black') match = !red
+      else if (prefer === 'heart') match = s === 'heart'
+      else if (prefer === 'club') match = s === 'club'
+      else if (prefer === 'nonheart') match = s !== 'heart'
+      if (!match) return false
+      if (hasGuicai) return true
+      return hasGuidao && isBlackCard(c)
+    })
+    if (!cand) continue
+    const skillName = hasGuicai ? '鬼才' : '鬼道'
+    const rep = takeHand(state, seat, cand.uid)!
+    discardCard(state, judged)
+    log(
+      state,
+      `${pl.name} 發動${skillName}，用【${getCardDef(rep.defId).name}】替換判定牌。`,
+    )
+    return rep
+  }
+  return judged
+}
+
+function continueBeginTurn(state: GameSnapshot): void {
+  if (state.winnerIds) return
+  const p = state.players[state.currentPlayer]
+  if (!p?.alive) {
+    advanceTurn(state)
+    return
+  }
   const skills = getGeneral(p.generalId).skills
 
   // 判定階段：樂不思蜀／兵糧寸斷
@@ -319,7 +437,10 @@ function beginTurn(state: GameSnapshot): void {
     if (!p.judges?.some((x) => x.uid === jCard.uid)) continue
     p.judges = p.judges.filter((x) => x.uid !== jCard.uid)
     const jdef = getCardDef(jCard.defId)
-    const judged = drawJudgeCard(state, shuffle)
+    let judged = drawJudgeCard(state, shuffle)
+    const preferJudge: JudgePrefer | undefined =
+      jdef.kind === 'lebu' ? 'heart' : jdef.kind === 'bingliang' ? 'club' : undefined
+    judged = applyJudgeReplaceSync(state, judged, preferJudge)
     let suit = judged ? getCardDef(judged.defId).suit : null
     if (judged) {
       discardCard(state, judged)
@@ -335,7 +456,6 @@ function beginTurn(state: GameSnapshot): void {
     }
     discardCard(state, jCard)
     if (jdef.kind === 'lebu') {
-      // 紅桃無效
       if (suit === 'heart') {
         log(state, `【樂不思蜀】判定為紅桃，無效。`)
       } else {
@@ -343,7 +463,6 @@ function beginTurn(state: GameSnapshot): void {
         log(state, `【樂不思蜀】生效，${p.name} 本回合跳過出牌階段。`)
       }
     } else if (jdef.kind === 'bingliang') {
-      // 梅花無效
       if (suit === 'club') {
         log(state, `【兵糧寸斷】判定為梅花，無效。`)
       } else {
@@ -353,10 +472,11 @@ function beginTurn(state: GameSnapshot): void {
     }
   }
 
-  // 洛神：準備／判定後，摸牌前
+  // 洛神
   if (skills.includes('luoshen')) {
     for (let i = 0; i < 8; i++) {
-      const judged = drawJudgeCard(state, shuffle)
+      let judged = drawJudgeCard(state, shuffle)
+      judged = applyJudgeReplaceSync(state, judged, 'black')
       if (!judged) break
       const def = getCardDef(judged.defId)
       const black = def.suit === 'spade' || def.suit === 'club'
@@ -383,7 +503,6 @@ function beginTurn(state: GameSnapshot): void {
     let drawN = 2
     if (skills.includes('yingzi')) drawN++
 
-    // 突襲：可少摸並拿別人手牌（簡化：若有敵人有手牌，少摸1並隨機得1張）
     if (skills.includes('tuxi')) {
       const victims = state.players.filter((o) => o.alive && o.id !== p.id && o.hand.length > 0)
       if (victims.length) {
@@ -407,7 +526,6 @@ function beginTurn(state: GameSnapshot): void {
 
   if (skipPlay) {
     log(state, `${p.name} 跳過出牌階段。`)
-    // 閉月仍可在結束時觸發：走 endPlayPhase 邏輯的摸牌部分
     if (skills.includes('biyue')) {
       draw(state, p.id, 1)
       log(state, `${p.name} 發動閉月，摸一張牌。`)
@@ -500,6 +618,9 @@ export function getPlayKindOptions(p: PlayerState, card: CardInstance): string[]
     if (kind === 'shan') opts.push('sha')
   }
   if (skills.includes('qixi') && isBlackCard(card)) opts.push('guohe')
+  if (skills.includes('guose') && getCardDef(card.defId).suit === 'diamond' && kind !== 'lebu') {
+    opts.push('lebu')
+  }
   if (skills.includes('jijiu') && isRedCard(card)) opts.push('tao')
   if (skills.includes('qingguo') && isBlackCard(card)) opts.push('shan')
   return [...new Set(opts)]
@@ -528,7 +649,29 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
   const p = state.players[playerId]
   const card = findCard(p, uid)
   if (!card) return
-  const kind = asKind && getPlayKindOptions(p, card).includes(asKind) ? asKind : cardKind(card)
+  const opts = getPlayKindOptions(p, card)
+  if (!asKind && opts.length > 1) {
+    const labels: Record<string, string> = {
+      sha: '當【殺】',
+      shan: '當【閃】',
+      tao: '當【桃】',
+      guohe: '當【過河拆橋】',
+      lebu: '當【樂不思蜀】',
+    }
+    state.prompt = {
+      kind: 'choice',
+      message: `選擇【${getCardDef(card.defId).name}】的使用方式`,
+      actorId: playerId,
+      choiceKey: 'play_as',
+      cardUids: [uid],
+      choices: opts.map((k) => ({
+        id: k,
+        label: labels[k] ?? `當【${k}】`,
+      })),
+    }
+    return
+  }
+  const kind = asKind && opts.includes(asKind) ? asKind : cardKind(card)
   const def = getCardDef(card.defId)
 
   if (def.type === 'equip') {
@@ -1474,7 +1617,8 @@ function askShan(state: GameSnapshot, sourceId: number, targetId: number, cardUi
   // 鐵騎：殺的目標判定，紅色則其不能出閃
   let skipShan = false
   if (getGeneral(source.generalId).skills.includes('tieqi')) {
-    const judged = drawJudgeCard(state, shuffle)
+    let judged = drawJudgeCard(state, shuffle)
+    judged = applyJudgeReplaceSync(state, judged, 'red')
     if (judged) {
       discardCard(state, judged)
       const jdef = getCardDef(judged.defId)
@@ -1501,7 +1645,8 @@ function askShan(state: GameSnapshot, sourceId: number, targetId: number, cardUi
 
   // 八卦陣：可判定當閃（青釭劍無視）
   if (!ignoreArm && armorKind(target) === 'bagua') {
-    const judged = drawJudgeCard(state, shuffle)
+    let judged = drawJudgeCard(state, shuffle)
+    judged = applyJudgeReplaceSync(state, judged, 'red')
     if (judged) {
       discardCard(state, judged)
       const ok = baguaJudgeSucceeds(judged)
@@ -1976,13 +2121,14 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
       if (!Number.isNaN(tid) && state.players[tid]?.alive) {
         // Classic: judge — black = 2 thunder damage. Simplified: 1 thunder always after judge black
         const judged = drawJudgeCard(state, shuffle)
-        if (judged) {
-          discardCard(state, judged)
-          const jdef = getCardDef(judged.defId)
+        let j2 = applyJudgeReplaceSync(state, judged, 'black')
+        if (j2) {
+          discardCard(state, j2)
+          const jdef = getCardDef(j2.defId)
           const black = jdef.suit === 'spade' || jdef.suit === 'club'
           log(state, `${state.players[playerId].name} 雷擊判定：${jdef.name}${black ? '（黑，造成雷傷）' : '（紅，無效）'}`)
           if (getGeneral(state.players[playerId].generalId).skills.includes('tiandu')) {
-            state.players[playerId].hand.push(judged)
+            state.players[playerId].hand.push(j2)
             state.discard.pop()
             log(state, `${state.players[playerId].name} 發動天妒，獲得判定牌。`)
           }
@@ -2277,6 +2423,228 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
       }
     } else {
       log(state, `${p.name} 不發動奸雄。`)
+    }
+    resumeAfterDamageFlow(state)
+    return
+  }
+
+  if (key === 'play_as') {
+    const uid = state.prompt.cardUids?.[0]
+    if (!uid) {
+      setPlayPrompt(state)
+      return
+    }
+    selectCard(state, playerId, uid, choiceId)
+    return
+  }
+
+  if (key === 'guanxing') {
+    const mode =
+      choiceId === 'reverse' ? 'reverse' : choiceId === 'bottom' ? 'bottom' : 'keep'
+    finishGuanxing(state, mode)
+    return
+  }
+
+  if (key === 'qiangxi_cost') {
+    const foes = state.prompt.targetIds ?? []
+    ;(state as GameSnapshot & { _qiangxiCost?: string })._qiangxiCost = choiceId
+    state.prompt = {
+      kind: 'choice',
+      message: '【強襲】選擇造成傷害的目標',
+      actorId: playerId,
+      choiceKey: 'qiangxi_target',
+      choices: foes.map((tid) => ({
+        id: String(tid),
+        label: state.players[tid].name,
+      })),
+    }
+    return
+  }
+
+  if (key === 'qiangxi_target') {
+    const p = state.players[playerId]
+    const tid = Number(choiceId)
+    const cost = (state as GameSnapshot & { _qiangxiCost?: string })._qiangxiCost
+    delete (state as GameSnapshot & { _qiangxiCost?: string })._qiangxiCost
+    if (!state.players[tid]?.alive) {
+      setPlayPrompt(state)
+      return
+    }
+    p.qiangxiUsed = true
+    if (cost === 'hp') {
+      p.hp -= 1
+      pushDamageFx(state, playerId, 1)
+      log(state, `${p.name} 發動【強襲】，失去1點體力。`)
+      if (p.hp <= 0) {
+        trySave(state, playerId, playerId)
+      }
+    } else if (cost?.startsWith('equip:')) {
+      const w = p.equips.weapon
+      if (w) {
+        leaveEquipArea(state, playerId, 'weapon', w)
+        log(state, `${p.name} 發動【強襲】，棄置武器【${getCardDef(w.defId).name}】。`)
+      }
+    } else if (cost?.startsWith('hand:')) {
+      const uid = cost.slice(5)
+      const c = takeHand(state, playerId, uid)
+      if (c) {
+        discardCard(state, c)
+        log(state, `${p.name} 發動【強襲】，棄置【${getCardDef(c.defId).name}】。`)
+      }
+    }
+    log(state, `${p.name} 對 ${state.players[tid].name} 造成1點傷害（強襲）。`)
+    if (dealDamage(state, tid, 1, playerId)) return
+    if (getDying(state) || isAwaitingZonePick(state)) return
+    checkVictory(state)
+    if (!state.winnerIds) setPlayPrompt(state)
+    return
+  }
+
+  if (key === 'qingnang_target') {
+    const p = state.players[playerId]
+    const tid = Number(choiceId)
+    const uids = state.prompt.selectedCardUids ?? []
+    for (const uid of uids) {
+      const c = takeHand(state, playerId, uid)
+      if (c) discardCard(state, c)
+    }
+    const t = state.players[tid]
+    if (t?.alive && t.hp < t.maxHp) {
+      t.hp += 1
+      log(state, `${p.name} 發動【青囊】，${t.name} 回覆1點體力（${t.hp}）。`)
+    }
+    p.qingnangUsed = true
+    setPlayPrompt(state)
+    return
+  }
+
+  if (key === 'jieyin_target') {
+    const p = state.players[playerId]
+    const tid = Number(choiceId)
+    const uids = state.prompt.selectedCardUids ?? []
+    for (const uid of uids) {
+      const c = takeHand(state, playerId, uid)
+      if (c) discardCard(state, c)
+    }
+    const t = state.players[tid]
+    if (p.hp < p.maxHp) {
+      p.hp += 1
+      log(state, `${p.name} 因【結姻】回覆1點體力（${p.hp}）。`)
+    }
+    if (t?.alive && t.hp < t.maxHp) {
+      t.hp += 1
+      log(state, `${t.name} 因【結姻】回覆1點體力（${t.hp}）。`)
+    }
+    p.jieyinUsed = true
+    setPlayPrompt(state)
+    return
+  }
+
+  if (key === 'lijian_first') {
+    const first = Number(choiceId)
+    const uids = state.prompt.selectedCardUids ?? []
+    const males = state.players.filter(
+      (t) =>
+        t.alive &&
+        t.id !== playerId &&
+        t.id !== first &&
+        t.generalId &&
+        getGeneral(t.generalId).gender === 'male',
+    )
+    state.prompt = {
+      kind: 'choice',
+      message: '【離間】選擇決鬥的另一方',
+      actorId: playerId,
+      choiceKey: 'lijian_second',
+      selectedCardUids: uids,
+      selectedTargetIds: [first],
+      choices: males.map((t) => ({ id: String(t.id), label: t.name })),
+    }
+    return
+  }
+
+  if (key === 'lijian_second') {
+    const p = state.players[playerId]
+    const first = state.prompt.selectedTargetIds?.[0]
+    const second = Number(choiceId)
+    const uids = state.prompt.selectedCardUids ?? []
+    for (const uid of uids) {
+      const c = takeHand(state, playerId, uid)
+      if (c) discardCard(state, c)
+    }
+    p.lijianUsed = true
+    if (first === undefined || !state.players[first]?.alive || !state.players[second]?.alive) {
+      setPlayPrompt(state)
+      return
+    }
+    log(
+      state,
+      `${p.name} 發動【離間】，令 ${state.players[first].name} 與 ${state.players[second].name} 決鬥。`,
+    )
+    resolveJuedou(state, first, second)
+    return
+  }
+
+  if (key === 'fanjian_target') {
+    const tid = Number(choiceId)
+    const uids = state.prompt.selectedCardUids ?? []
+    state.prompt = {
+      kind: 'choice',
+      message: `【反間】${state.players[tid].name} 請猜花色`,
+      actorId: tid,
+      choiceKey: 'fanjian_suit',
+      selectedCardUids: uids,
+      selectedTargetIds: [playerId, tid],
+      choices: [
+        { id: 'spade', label: '黑桃' },
+        { id: 'heart', label: '紅桃' },
+        { id: 'club', label: '梅花' },
+        { id: 'diamond', label: '方塊' },
+      ],
+    }
+    return
+  }
+
+  if (key === 'fanjian_suit') {
+    const sourceId = state.prompt.selectedTargetIds?.[0]
+    const tid = state.prompt.selectedTargetIds?.[1]
+    const uid = state.prompt.selectedCardUids?.[0]
+    if (sourceId === undefined || tid === undefined || !uid) {
+      setPlayPrompt(state)
+      return
+    }
+    const source = state.players[sourceId]
+    const target = state.players[tid]
+    const card = takeHand(state, sourceId, uid)
+    if (!card) {
+      setPlayPrompt(state)
+      return
+    }
+    const suit = getCardDef(card.defId).suit
+    target.hand.push(card)
+    source.fanjianUsed = true
+    const guess = choiceId
+    const ok = suit === guess
+    log(
+      state,
+      `${target.name} 猜${({ spade: '黑桃', heart: '紅桃', club: '梅花', diamond: '方塊' } as Record<string, string>)[guess] ?? guess}，實為【${getCardDef(card.defId).name}】${ok ? '（猜對）' : '（猜錯）'}。`,
+    )
+    if (!ok) {
+      if (dealDamage(state, tid, 1, sourceId)) return
+      if (getDying(state) || isAwaitingZonePick(state)) return
+    }
+    checkVictory(state)
+    if (!state.winnerIds) setPlayPrompt(state)
+    return
+  }
+
+  if (key === 'jieming') {
+    const tid = Number(choiceId)
+    const t = state.players[tid]
+    if (t?.alive) {
+      const n = Math.max(1, t.maxHp - t.hp)
+      draw(state, tid, n)
+      log(state, `${state.players[playerId].name} 發動節命，令 ${t.name} 摸 ${n} 張牌。`)
     }
     resumeAfterDamageFlow(state)
     return
@@ -2793,7 +3161,8 @@ function isAwaitingZonePick(state: GameSnapshot): boolean {
       state.prompt.choiceKey === 'ganglie' ||
       state.prompt.choiceKey === 'jianxiong' ||
       state.prompt.choiceKey === 'yaowu' ||
-      state.prompt.choiceKey === 'dying_save')
+      state.prompt.choiceKey === 'dying_save' ||
+      state.prompt.choiceKey === 'jieming')
   )
 }
 
@@ -2940,12 +3309,6 @@ function dealDamage(
       draw(state, targetId, n)
       log(state, `${t.name} 發動遺計，摸 ${n} 張牌。`)
     }
-    // 節命：摸已損失體力數（至少1）
-    if (afterSkills.includes('jieming') && amount > 0) {
-      const n = Math.max(1, t.maxHp - Math.max(t.hp, 0))
-      draw(state, targetId, n)
-      log(state, `${t.name} 發動節命，摸 ${n} 張牌。`)
-    }
   }
 
   // 狂骨：來源對距離1目標造成傷害後回1體力
@@ -2966,6 +3329,21 @@ function dealDamage(
 
   if (t.alive) {
     const skills = getGeneral(t.generalId).skills
+    // 節命：令一名角色摸已損失體力數（至少1）
+    if (skills.includes('jieming') && amount > 0) {
+      const alive = state.players.filter((x) => x.alive)
+      state.prompt = {
+        kind: 'choice',
+        message: `【節命】${t.name}：選擇一名角色摸牌`,
+        actorId: targetId,
+        choiceKey: 'jieming',
+        choices: alive.map((x) => {
+          const n = Math.max(1, x.maxHp - Math.max(x.hp, 0))
+          return { id: String(x.id), label: `${x.name}（摸${n}）` }
+        }),
+      }
+      return true
+    }
     // 奸雄：可選擇獲得造成傷害的牌（可拒絕）
     if (skills.includes('jianxiong') && sourceId !== null) {
       const canTake =
@@ -3000,7 +3378,8 @@ function dealDamage(
     }
     // 剛烈：判定，非紅桃則來源棄兩張或受1傷
     if (skills.includes('ganglie') && sourceId !== null && source) {
-      const judged = drawJudgeCard(state, shuffle)
+      let judged = drawJudgeCard(state, shuffle)
+      judged = applyJudgeReplaceSync(state, judged, 'nonheart')
       if (judged) {
         discardCard(state, judged)
         const jdef = getCardDef(judged.defId)
@@ -3379,6 +3758,110 @@ export function activateSkill(state: GameSnapshot, playerId: number, skillId: st
     return
   }
 
+  if (skillId === 'qiangxi') {
+    if (p.qiangxiUsed) return
+    const range = attackRangeOf(p)
+    const foes = state.players.filter(
+      (t) => t.alive && t.id !== playerId && getDistance(state, playerId, t.id) <= range,
+    )
+    if (!foes.length) return
+    const weaponChoices: { id: string; label: string }[] = []
+    if (p.equips.weapon) {
+      weaponChoices.push({
+        id: `equip:weapon`,
+        label: `棄置裝備【${getCardDef(p.equips.weapon.defId).name}】`,
+      })
+    }
+    for (const c of p.hand) {
+      if (getCardDef(c.defId).slot === 'weapon') {
+        weaponChoices.push({
+          id: `hand:${c.uid}`,
+          label: `棄置手牌【${getCardDef(c.defId).name}】`,
+        })
+      }
+    }
+    state.prompt = {
+      kind: 'choice',
+      message: '【強襲】選擇代價',
+      actorId: playerId,
+      choiceKey: 'qiangxi_cost',
+      targetIds: foes.map((t) => t.id),
+      choices: [
+        ...(p.hp > 0 ? [{ id: 'hp', label: '失去1點體力' }] : []),
+        ...weaponChoices,
+      ],
+    }
+    return
+  }
+
+  if (skillId === 'qingnang') {
+    if (p.qingnangUsed || !p.hand.length) return
+    state.prompt = {
+      kind: 'skill_cards',
+      message: '【青囊】選擇一張手牌棄置',
+      actorId: playerId,
+      skillId: 'qingnang',
+      cardUids: p.hand.map((c) => c.uid),
+      selectedCardUids: [],
+      minTargets: 1,
+      maxTargets: 1,
+      choices: [{ id: 'confirm', label: '選擇回覆目標' }],
+      choiceKey: 'skill_confirm',
+    }
+    return
+  }
+
+  if (skillId === 'jieyin') {
+    if (p.jieyinUsed || p.hand.length < 2) return
+    state.prompt = {
+      kind: 'skill_cards',
+      message: '【結姻】選擇兩張手牌棄置',
+      actorId: playerId,
+      skillId: 'jieyin',
+      cardUids: p.hand.map((c) => c.uid),
+      selectedCardUids: [],
+      minTargets: 2,
+      maxTargets: 2,
+      choices: [{ id: 'confirm', label: '選擇男性目標' }],
+      choiceKey: 'skill_confirm',
+    }
+    return
+  }
+
+  if (skillId === 'lijian') {
+    if (p.lijianUsed || !p.hand.length) return
+    state.prompt = {
+      kind: 'skill_cards',
+      message: '【離間】選擇一張手牌棄置',
+      actorId: playerId,
+      skillId: 'lijian',
+      cardUids: p.hand.map((c) => c.uid),
+      selectedCardUids: [],
+      minTargets: 1,
+      maxTargets: 1,
+      choices: [{ id: 'confirm', label: '選擇兩名男性' }],
+      choiceKey: 'skill_confirm',
+    }
+    return
+  }
+
+  if (skillId === 'fanjian') {
+    if (p.fanjianUsed || !p.hand.length) return
+    state.prompt = {
+      kind: 'skill_cards',
+      message: '【反間】選擇要交出的一張手牌',
+      actorId: playerId,
+      skillId: 'fanjian',
+      cardUids: p.hand.map((c) => c.uid),
+      selectedCardUids: [],
+      minTargets: 1,
+      maxTargets: 1,
+      choices: [{ id: 'confirm', label: '選擇目標' }],
+      choiceKey: 'skill_confirm',
+    }
+    return
+  }
+
   if (skillId === 'zhangba') {
     if (weaponKind(p) !== 'zhangba' || p.hand.length < 2) return
     state.prompt = {
@@ -3483,6 +3966,82 @@ function confirmSkillCards(state: GameSnapshot, playerId: number): void {
         id: String(tid),
         label: state.players[tid].name,
       })),
+    }
+    return
+  }
+
+  if (skillId === 'qingnang') {
+    const wounded = state.players.filter((t) => t.alive && t.hp < t.maxHp)
+    if (!wounded.length) {
+      setPlayPrompt(state)
+      return
+    }
+    state.prompt = {
+      kind: 'choice',
+      message: '【青囊】選擇回覆體力的角色',
+      actorId: playerId,
+      choiceKey: 'qingnang_target',
+      selectedCardUids: selected,
+      choices: wounded.map((t) => ({ id: String(t.id), label: t.name })),
+    }
+    return
+  }
+
+  if (skillId === 'jieyin') {
+    const males = state.players.filter(
+      (t) => t.alive && t.generalId && getGeneral(t.generalId).gender === 'male',
+    )
+    if (!males.length) {
+      setPlayPrompt(state)
+      return
+    }
+    state.prompt = {
+      kind: 'choice',
+      message: '【結姻】選擇一名男性角色',
+      actorId: playerId,
+      choiceKey: 'jieyin_target',
+      selectedCardUids: selected,
+      choices: males.map((t) => ({ id: String(t.id), label: t.name })),
+    }
+    return
+  }
+
+  if (skillId === 'lijian') {
+    const males = state.players.filter(
+      (t) =>
+        t.alive &&
+        t.id !== playerId &&
+        t.generalId &&
+        getGeneral(t.generalId).gender === 'male',
+    )
+    if (males.length < 2) {
+      setPlayPrompt(state)
+      return
+    }
+    state.prompt = {
+      kind: 'choice',
+      message: '【離間】選擇先出【殺】的男性（決鬥發起方）',
+      actorId: playerId,
+      choiceKey: 'lijian_first',
+      selectedCardUids: selected,
+      choices: males.map((t) => ({ id: String(t.id), label: t.name })),
+    }
+    return
+  }
+
+  if (skillId === 'fanjian') {
+    const others = state.players.filter((t) => t.alive && t.id !== playerId)
+    if (!others.length) {
+      setPlayPrompt(state)
+      return
+    }
+    state.prompt = {
+      kind: 'choice',
+      message: '【反間】選擇獲得此牌的角色',
+      actorId: playerId,
+      choiceKey: 'fanjian_target',
+      selectedCardUids: selected,
+      choices: others.map((t) => ({ id: String(t.id), label: t.name })),
     }
   }
 }

@@ -1,6 +1,7 @@
 import { getGeneral } from '../data/generals'
+import { getCardDef } from '../data/cards'
 import type { GameSnapshot, PlayerState } from './types'
-import { canReach } from './helpers'
+import { attackRangeOf, canReach, getDistance } from './helpers'
 import { weaponKind } from './weapons'
 
 export interface SkillAction {
@@ -31,6 +32,54 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
   }
   if (skills.includes('luoyi') && !p.luoyiActive && p.hand.length >= 2) {
     actions.push({ id: 'luoyi', label: '裸衣', hint: '棄兩張牌：本回合殺傷害+1，不能用錦囊' })
+  }
+  if (skills.includes('qiangxi') && !p.qiangxiUsed) {
+    const range = attackRangeOf(p)
+    const foes = state.players.filter(
+      (t) => t.alive && t.id !== playerId && getDistance(state, playerId, t.id) <= range,
+    )
+    const hasWeapon =
+      !!p.equips.weapon ||
+      p.hand.some((c) => getCardDef(c.defId).slot === 'weapon')
+    if (foes.length && (p.hp > 0 || hasWeapon)) {
+      actions.push({
+        id: 'qiangxi',
+        label: '強襲',
+        hint: '失去1體力或棄武器，對攻擊範圍內造成1傷害',
+      })
+    }
+  }
+  if (skills.includes('qingnang') && !p.qingnangUsed && p.hand.length > 0) {
+    const wounded = state.players.filter((t) => t.alive && t.hp < t.maxHp)
+    if (wounded.length) {
+      actions.push({ id: 'qingnang', label: '青囊', hint: '棄一張牌，令一名角色回1體力' })
+    }
+  }
+  if (skills.includes('jieyin') && !p.jieyinUsed && p.hand.length >= 2) {
+    const males = state.players.filter(
+      (t) => t.alive && t.generalId && getGeneral(t.generalId).gender === 'male',
+    )
+    if (males.length) {
+      actions.push({ id: 'jieyin', label: '結姻', hint: '棄兩張牌，令自己與一名男性各回1體力' })
+    }
+  }
+  if (skills.includes('lijian') && !p.lijianUsed && p.hand.length > 0) {
+    const males = state.players.filter(
+      (t) =>
+        t.alive &&
+        t.id !== playerId &&
+        t.generalId &&
+        getGeneral(t.generalId).gender === 'male',
+    )
+    if (males.length >= 2) {
+      actions.push({ id: 'lijian', label: '離間', hint: '棄一張牌，令兩名男性決鬥' })
+    }
+  }
+  if (skills.includes('fanjian') && !p.fanjianUsed && p.hand.length > 0) {
+    const others = state.players.filter((t) => t.alive && t.id !== playerId)
+    if (others.length) {
+      actions.push({ id: 'fanjian', label: '反間', hint: '交給一名角色一張牌並令其猜花色' })
+    }
   }
   if (weaponKind(p) === 'zhangba' && p.hand.length >= 2) {
     const canHit = state.players.some(

@@ -48,8 +48,8 @@ export const SKILL_CATALOG: SkillSpec[] = [
     name: '鬼才',
     owners: ['simayi'],
     trigger: '判定牌生效前',
-    behaviour: '可打出手牌替換判定牌',
-    status: 'missing',
+    behaviour: '有對應花色時自動替換判定牌',
+    status: 'ok',
     logHints: ['鬼才'],
   },
   {
@@ -147,8 +147,8 @@ export const SKILL_CATALOG: SkillSpec[] = [
     name: '觀星',
     owners: ['zhugeliang'],
     trigger: '準備階段',
-    behaviour: '觀看牌堆頂並重排',
-    status: 'missing',
+    behaviour: '觀看牌堆頂：保留／反轉／置底',
+    status: 'ok',
     logHints: ['觀星'],
   },
   {
@@ -256,7 +256,7 @@ export const SKILL_CATALOG: SkillSpec[] = [
     owners: ['zhouyu'],
     trigger: '出牌階段主動',
     behaviour: '交給對方一張牌並令其猜花色',
-    status: 'missing',
+    status: 'ok',
     logHints: ['反間'],
   },
   {
@@ -265,7 +265,7 @@ export const SKILL_CATALOG: SkillSpec[] = [
     owners: ['daqiao'],
     trigger: '使用牌時',
     behaviour: '方塊可當樂不思蜀',
-    status: 'missing',
+    status: 'ok',
     logHints: ['國色'],
   },
   {
@@ -301,7 +301,7 @@ export const SKILL_CATALOG: SkillSpec[] = [
     owners: ['sunshangxiang'],
     trigger: '出牌階段限一次',
     behaviour: '棄兩張牌令自己與一名男性各回1',
-    status: 'missing',
+    status: 'ok',
     logHints: ['結姻'],
   },
   {
@@ -328,7 +328,7 @@ export const SKILL_CATALOG: SkillSpec[] = [
     owners: ['huatuo'],
     trigger: '出牌階段限一次',
     behaviour: '棄一張牌令一名角色回1體力',
-    status: 'missing',
+    status: 'ok',
     logHints: ['青囊'],
   },
   {
@@ -346,7 +346,7 @@ export const SKILL_CATALOG: SkillSpec[] = [
     owners: ['diaochan'],
     trigger: '出牌階段限一次',
     behaviour: '棄一張牌令兩名男性決鬥',
-    status: 'missing',
+    status: 'ok',
     logHints: ['離間'],
   },
   {
@@ -355,7 +355,7 @@ export const SKILL_CATALOG: SkillSpec[] = [
     owners: ['diaochan'],
     trigger: '結束出牌／結束階段',
     behaviour: '摸一張牌',
-    status: 'partial',
+    status: 'ok',
     logHints: ['閉月'],
   },
   {
@@ -372,8 +372,8 @@ export const SKILL_CATALOG: SkillSpec[] = [
     name: '鬼道',
     owners: ['zhangjiao'],
     trigger: '判定牌生效前',
-    behaviour: '可打出黑色牌替換判定牌',
-    status: 'missing',
+    behaviour: '有對應黑色牌時自動替換判定牌',
+    status: 'ok',
     logHints: ['鬼道'],
   },
   {
@@ -400,7 +400,7 @@ export const SKILL_CATALOG: SkillSpec[] = [
     owners: ['zhoutai'],
     trigger: '瀕死',
     behaviour: '摸一張後若有手牌則回至1體力',
-    status: 'partial',
+    status: 'ok',
     logHints: ['不屈'],
   },
   {
@@ -408,8 +408,8 @@ export const SKILL_CATALOG: SkillSpec[] = [
     name: '節命',
     owners: ['xunyu'],
     trigger: '受到傷害後',
-    behaviour: '摸已損失體力數（至少1）',
-    status: 'partial',
+    behaviour: '令一名角色摸其已損失體力數（至少1）',
+    status: 'ok',
     logHints: ['節命'],
   },
   {
@@ -429,5 +429,14 @@ export const SKILL_CATALOG: SkillSpec[] = [
     behaviour: '摸一張牌',
     status: 'ok',
     logHints: ['激昂'],
+  },
+  {
+    id: 'qiangxi',
+    name: '強襲',
+    owners: ['dianwei'],
+    trigger: '出牌階段限一次',
+    behaviour: '失去1體力或棄武器，對攻擊範圍內造成1傷害',
+    status: 'ok',
+    logHints: ['強襲'],
   },
 ]

@@ -73,6 +73,12 @@ export interface PlayerState {
   luoyiActive?: boolean
   /** 制衡每回合限一次 */
   zhihengUsed?: boolean
+  /** 強襲／青囊／結姻／離間／反間 每回合限一次 */
+  qiangxiUsed?: boolean
+  qingnangUsed?: boolean
+  jieyinUsed?: boolean
+  lijianUsed?: boolean
+  fanjianUsed?: boolean
   /** 仁德本回合已交出的牌數 */
   rendeCount?: number
   /** Temporary flags */

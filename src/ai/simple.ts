@@ -202,6 +202,10 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
       activateSkill(state, playerId, 'kurou')
       return
     }
+    if (skills.some((s) => s.id === 'qiangxi') && !p.qiangxiUsed && p.hp > 1) {
+      activateSkill(state, playerId, 'qiangxi')
+      return
+    }
     if (skills.some((s) => s.id === 'luoyi') && shouldActivateLuoyi(state, playerId)) {
       activateSkill(state, playerId, 'luoyi')
       return
@@ -506,6 +510,61 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
   }
   if (key === 'ganglie') return ids.includes('discard') ? 'discard' : 'damage'
   if (key === 'jianxiong') return ids.includes('take') ? 'take' : 'skip'
+  if (key === 'guanxing') return 'keep'
+  if (key === 'play_as') {
+    // Prefer attack conversions
+    if (ids.includes('sha')) return 'sha'
+    if (ids.includes('guohe')) return 'guohe'
+    if (ids.includes('lebu')) return 'lebu'
+    return ids[0] ?? null
+  }
+  if (key === 'qiangxi_cost') {
+    const weapon = ids.find((id) => id.startsWith('equip:') || id.startsWith('hand:'))
+    if (weapon) return weapon
+    return ids.includes('hp') ? 'hp' : ids[0] ?? null
+  }
+  if (key === 'qiangxi_target') {
+    const hostiles = ids.filter((id) => scoreAttackTarget(state, playerId, Number(id)) > 0)
+    return hostiles[0] ?? ids[0] ?? null
+  }
+  if (key === 'qingnang_target' || key === 'jieyin_target') {
+    // Prefer self if wounded, else ally
+    if (ids.includes(String(playerId))) {
+      const me = state.players[playerId]
+      if (me.hp < me.maxHp) return String(playerId)
+    }
+    const ally = ids.find((id) => !believedHostile(state, playerId, Number(id)))
+    return ally ?? ids[0] ?? null
+  }
+  if (key === 'lijian_first' || key === 'lijian_second') {
+    const hostiles = ids.filter((id) => believedHostile(state, playerId, Number(id)))
+    return hostiles[0] ?? ids[0] ?? null
+  }
+  if (key === 'fanjian_target') {
+    const hostiles = ids.filter((id) => believedHostile(state, playerId, Number(id)))
+    return hostiles[0] ?? ids[0] ?? null
+  }
+  if (key === 'fanjian_suit') {
+    // Random-ish: prefer heart
+    return ids.includes('heart') ? 'heart' : ids[0] ?? null
+  }
+  if (key === 'jieming') {
+    // Prefer self if wounded a lot, else ally with most lost HP
+    let best = ids[0] ?? null
+    let bestN = -1
+    for (const id of ids) {
+      const t = state.players[Number(id)]
+      if (!t) continue
+      const n = Math.max(1, t.maxHp - Math.max(t.hp, 0))
+      const ally = !believedHostile(state, playerId, t.id) || t.id === playerId
+      const score = ally ? n + 10 : n
+      if (score > bestN) {
+        bestN = score
+        best = id
+      }
+    }
+    return best
+  }
   if (key === 'dying_save') {
     const targetId = state.prompt.targetIds?.[0]
     if (targetId === undefined) return 'skip'
