@@ -6,6 +6,7 @@ export type Identity = 'lord' | 'loyal' | 'rebel' | 'spy' | 'none'
 export type Kingdom = 'wei' | 'shu' | 'wu' | 'qun' | 'god'
 export type Phase = 'prepare' | 'judge' | 'draw' | 'play' | 'discard' | 'end'
 export type GameMode = 'duel' | 'identity5' | 'identity8'
+export type MatchPhase = 'pick_general' | 'playing'
 
 export interface CardDef {
   id: string
@@ -40,6 +41,7 @@ export interface PlayerState {
   id: number
   name: string
   isHuman: boolean
+  /** Empty until general is chosen / revealed */
   generalId: string
   identity: Identity
   hp: number
@@ -54,6 +56,7 @@ export interface PlayerState {
 
 export type PromptKind =
   | 'idle'
+  | 'choose_general'
   | 'choose_card'
   | 'choose_target'
   | 'respond_shan'
@@ -67,6 +70,8 @@ export interface PromptState {
   actorId: number | null
   /** Card UIDs that can be selected */
   cardUids?: string[]
+  /** General ids offered for pick */
+  generalIds?: string[]
   /** Player ids that can be targeted */
   targetIds?: number[]
   minTargets?: number
@@ -100,6 +105,10 @@ export interface MatchConfig {
   }>
   victory?: VictoryRule
   campaignStageId?: string
+  /** Free play: defer dealing until generals are picked */
+  deferGeneralPick?: boolean
+  /** Offered generals for human (random 3 or full list) */
+  offeredGenerals?: string[]
 }
 
 export interface GameSnapshot {
@@ -109,6 +118,7 @@ export interface GameSnapshot {
   discard: CardInstance[]
   currentPlayer: number
   phase: Phase
+  matchPhase: MatchPhase
   round: number
   prompt: PromptState
   log: LogEntry[]

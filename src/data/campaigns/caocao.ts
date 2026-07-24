@@ -1,4 +1,5 @@
 import type { Identity, MatchConfig, PackId, VictoryRule } from '../../engine/types'
+import { listGeneralsForPick } from '../generals'
 
 export interface CampaignStage {
   id: string
@@ -155,27 +156,26 @@ export function buildStageMatch(
 export function buildFreeMatch(opts: {
   mode: 'duel' | 'identity5' | 'identity8'
   useEx: boolean
-  humanGeneralId: string
+  /** If true, offer full general list; else random 3 */
+  forceSelectGeneral: boolean
 }): MatchConfig {
   const packs: PackId[] = opts.useEx ? ['standard', 'ex'] : ['standard']
+  const allIds = listGeneralsForPick().map((g) => g.id)
+  const offeredGenerals = opts.forceSelectGeneral
+    ? allIds
+    : [...allIds].sort(() => Math.random() - 0.5).slice(0, 3)
 
   if (opts.mode === 'duel') {
-    const foes = ['lvbu', 'zhangfei', 'ganning', 'machao'].filter(
-      (id) => id !== opts.humanGeneralId,
-    )
     return {
       mode: 'duel',
       packs,
       humanSeat: 0,
       players: [
-        { name: '你', isHuman: true, generalId: opts.humanGeneralId, identity: 'none' },
-        {
-          name: '電腦',
-          isHuman: false,
-          generalId: foes[Math.floor(Math.random() * foes.length)],
-          identity: 'none',
-        },
+        { name: '你', isHuman: true, generalId: '', identity: 'none' },
+        { name: '電腦', isHuman: false, generalId: '', identity: 'none' },
       ],
+      deferGeneralPick: true,
+      offeredGenerals,
     }
   }
 
@@ -185,51 +185,19 @@ export function buildFreeMatch(opts: {
       : ['lord', 'loyal', 'rebel', 'rebel', 'spy']
 
   const shuffled = [...identities].sort(() => Math.random() - 0.5)
-  const needAi = shuffled.length - 1
-  const pool = [
-    'caocao',
-    'liubei',
-    'sunquan',
-    'guanyu',
-    'zhangfei',
-    'zhouyu',
-    'ganning',
-    'zhaoyun',
-    'simayi',
-    'zhenji',
-    'diaochan',
-    'huatuo',
-    'machao',
-    'lvmeng',
-    'xiahoudun',
-    'zhangliao',
-    'huanggai',
-    'luxun',
-    'daqiao',
-    'sunshangxiang',
-    'guojia',
-    'xuchu',
-    'zhugeliang',
-    'huangyueying',
-  ].filter((id) => id !== opts.humanGeneralId)
+  const players: MatchConfig['players'] = shuffled.map((identity, i) => ({
+    name: i === 0 ? '你' : `電腦${i}`,
+    isHuman: i === 0,
+    generalId: '',
+    identity,
+  }))
 
-  const aiGenerals = [...pool].sort(() => Math.random() - 0.5).slice(0, needAi)
-  const players: MatchConfig['players'] = shuffled.map((identity, i) => {
-    if (i === 0) {
-      return {
-        name: '你',
-        isHuman: true,
-        generalId: opts.humanGeneralId,
-        identity,
-      }
-    }
-    return {
-      name: `電腦${i}`,
-      isHuman: false,
-      generalId: aiGenerals[i - 1],
-      identity,
-    }
-  })
-
-  return { mode: opts.mode, packs, humanSeat: 0, players }
+  return {
+    mode: opts.mode,
+    packs,
+    humanSeat: 0,
+    players,
+    deferGeneralPick: true,
+    offeredGenerals,
+  }
 }

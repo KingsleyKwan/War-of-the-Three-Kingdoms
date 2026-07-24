@@ -32,7 +32,23 @@ export function createMatch(config: MatchConfig): GameSnapshot {
   const defs = buildDeck(config.packs)
   const deck: CardInstance[] = shuffle(defs.map((d) => ({ uid: nextUid(), defId: d.id })))
 
+  const defer = !!config.deferGeneralPick
   const players: PlayerState[] = config.players.map((p, i) => {
+    if (defer || !p.generalId) {
+      return {
+        id: i,
+        name: p.name,
+        isHuman: p.isHuman,
+        generalId: '',
+        identity: p.identity,
+        hp: 0,
+        maxHp: 0,
+        hand: [],
+        equips: {},
+        alive: true,
+        shaUsedThisTurn: false,
+      }
+    }
     const g = getGeneral(p.generalId)
     return {
       id: i,
@@ -49,8 +65,8 @@ export function createMatch(config: MatchConfig): GameSnapshot {
     }
   })
 
-  // Lord +1 HP in identity
-  if (config.mode === 'identity5' || config.mode === 'identity8') {
+  // Lord +1 HP in identity (only when generals already known)
+  if (!defer && (config.mode === 'identity5' || config.mode === 'identity8')) {
     const lord = players.find((p) => p.identity === 'lord')
     if (lord) {
       lord.maxHp += 1
@@ -58,6 +74,7 @@ export function createMatch(config: MatchConfig): GameSnapshot {
     }
   }
 
+  const human = players.find((p) => p.isHuman) ?? players[0]
   const state: GameSnapshot = {
     config,
     players,
@@ -68,11 +85,24 @@ export function createMatch(config: MatchConfig): GameSnapshot {
         ? (players.find((p) => p.identity === 'lord')?.id ?? 0)
         : 0,
     phase: 'prepare',
+    matchPhase: defer ? 'pick_general' : 'playing',
     round: 1,
     prompt: idlePrompt(),
     log: [],
     winnerIds: null,
     resultMessage: null,
+  }
+
+  if (defer) {
+    const offered = config.offeredGenerals ?? []
+    state.prompt = {
+      kind: 'choose_general',
+      message: '請選擇你的武將',
+      actorId: human.id,
+      generalIds: offered,
+    }
+    log(state, '座位與身份已確定。請選擇武將。')
+    return state
   }
 
   // Initial deal: 4 each
@@ -82,6 +112,85 @@ export function createMatch(config: MatchConfig): GameSnapshot {
   log(state, '發牌完成，戰斗開始。')
   beginTurn(state)
   return state
+}
+
+/** After human picks a general: assign AI generals, deal, start */
+export function confirmGeneralPick(state: GameSnapshot, generalId: string): void {
+  if (state.matchPhase !== 'pick_general' || state.prompt.kind !== 'choose_general') return
+  const offered = state.prompt.generalIds ?? []
+  if (offered.length && !offered.includes(generalId)) return
+
+  const human = state.players.find((p) => p.isHuman)
+  if (!human) return
+
+  applyGeneral(human, generalId)
+  log(state, `你選擇了武將【${getGeneral(generalId).name}】。`)
+
+  const used = new Set<string>([generalId])
+  const pool = listPickPool().filter((id) => !used.has(id))
+  const shuffled = shuffle(pool)
+
+  for (const p of state.players) {
+    if (p.isHuman) continue
+    const gid = shuffled.pop()
+    if (!gid) break
+    applyGeneral(p, gid)
+    used.add(gid)
+    log(state, `${p.name} 亮出武將【${getGeneral(gid).name}】。`)
+  }
+
+  if (state.config.mode === 'identity5' || state.config.mode === 'identity8') {
+    const lord = state.players.find((p) => p.identity === 'lord')
+    if (lord) {
+      lord.maxHp += 1
+      lord.hp = lord.maxHp
+    }
+    state.currentPlayer = lord?.id ?? 0
+  }
+
+  state.matchPhase = 'playing'
+  for (const pl of state.players) {
+    draw(state, pl.id, 4)
+  }
+  log(state, '發牌完成，戰斗開始。')
+  beginTurn(state)
+}
+
+function applyGeneral(p: PlayerState, generalId: string): void {
+  const g = getGeneral(generalId)
+  p.generalId = generalId
+  p.maxHp = g.maxHp
+  p.hp = g.maxHp
+}
+
+function listPickPool(): string[] {
+  return [
+    'caocao',
+    'liubei',
+    'sunquan',
+    'guanyu',
+    'zhangfei',
+    'zhouyu',
+    'ganning',
+    'zhaoyun',
+    'simayi',
+    'zhenji',
+    'diaochan',
+    'huatuo',
+    'machao',
+    'lvmeng',
+    'xiahoudun',
+    'zhangliao',
+    'huanggai',
+    'luxun',
+    'daqiao',
+    'sunshangxiang',
+    'guojia',
+    'xuchu',
+    'zhugeliang',
+    'huangyueying',
+    'lvbu',
+  ]
 }
 
 function idlePrompt(): PromptState {

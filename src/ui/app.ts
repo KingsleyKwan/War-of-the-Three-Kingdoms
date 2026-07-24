@@ -8,11 +8,12 @@ import {
   unlockNextStage,
   type CampaignStage,
 } from '../data/campaigns/caocao'
-import { getGeneral, listGeneralsForPick } from '../data/generals'
+import { getGeneral } from '../data/generals'
 import { CARD_HELP, rankLabel, suitName, suitSymbol } from '../data/help'
 import { portraitDataUri } from '../data/portraits'
 import {
   cancelTarget,
+  confirmGeneralPick,
   createMatch,
   endPlayPhase,
   passResponse,
@@ -30,9 +31,6 @@ interface AppState {
   screen: Screen
   setupMode: GameMode
   useEx: boolean
-  generalId: string
-  /** Random 3 offered when not force-select */
-  offeredGenerals: string[]
   stage: CampaignStage | null
   allyChoice: string | null
   game: GameSnapshot | null
@@ -46,8 +44,6 @@ const app: AppState = {
   screen: 'start',
   setupMode: 'duel',
   useEx: false,
-  generalId: 'caocao',
-  offeredGenerals: pickThreeGenerals(),
   stage: null,
   allyChoice: null,
   game: null,
@@ -55,11 +51,6 @@ const app: AppState = {
   settings: loadSettings(),
   detailHtml: null,
   aiBusy: false,
-}
-
-function pickThreeGenerals(): string[] {
-  const all = listGeneralsForPick().map((g) => g.id)
-  return [...all].sort(() => Math.random() - 0.5).slice(0, 3)
 }
 
 const root = () => document.querySelector<HTMLDivElement>('#app')!
@@ -142,14 +133,7 @@ function renderStart(): string {
 function bindStart(): void {
   root().querySelectorAll('[data-go]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const go = (btn as HTMLElement).dataset.go as Screen
-      if (go === 'setup') {
-        if (!app.settings.forceSelectGeneral) app.offeredGenerals = pickThreeGenerals()
-        if (!app.offeredGenerals.includes(app.generalId)) {
-          app.generalId = app.offeredGenerals[0]
-        }
-      }
-      app.screen = go
+      app.screen = (btn as HTMLElement).dataset.go as Screen
       render()
     })
   })
@@ -175,7 +159,7 @@ function renderSettings(): string {
       </label>
       <label class="field check">
         <input type="checkbox" id="force-select" ${s.forceSelectGeneral ? 'checked' : ''} />
-        <span>自由對戰強制自選武將（關閉則隨機三選一）</span>
+        <span>對局內可選全部武將（關閉則隨機三選一）</span>
       </label>
       <button type="button" class="btn primary" id="save-settings">儲存</button>
     </div>
@@ -204,19 +188,6 @@ function bindSettings(): void {
   })
 }
 
-function generalOptionsHtml(): string {
-  const force = app.settings.forceSelectGeneral
-  const list = force
-    ? listGeneralsForPick()
-    : listGeneralsForPick().filter((g) => app.offeredGenerals.includes(g.id))
-  return list
-    .map(
-      (g) =>
-        `<option value="${g.id}" ${g.id === app.generalId ? 'selected' : ''}>${g.name}（${kingdomName(g.kingdom)}·${g.maxHp}血）</option>`,
-    )
-    .join('')
-}
-
 function renderSetup(): string {
   return `
   <div class="screen panel-screen">
@@ -237,16 +208,7 @@ function renderSetup(): string {
         <input type="checkbox" id="ex" ${app.useEx ? 'checked' : ''} />
         <span>啟用卡包：軍爭（EX）</span>
       </label>
-      <p class="hint">標準包固定啟用。軍爭包會加入火攻、鐵索、寒冰劍等牌。</p>
-      <label class="field">
-        <span>${app.settings.forceSelectGeneral ? '你的武將' : '隨機三選一'}</span>
-        <select id="general">${generalOptionsHtml()}</select>
-      </label>
-      ${
-        !app.settings.forceSelectGeneral
-          ? `<button type="button" class="btn ghost" id="reroll">重新隨機三將</button>`
-          : ''
-      }
+      <p class="hint">標準包固定啟用。進入對局後會先看到座位與身份，再從系統隨機抽出的三名武將中選擇（可在設定改為全部可選）。</p>
       <button type="button" class="btn primary" id="start-match">開始對戰</button>
     </div>
   </div>`
@@ -261,11 +223,6 @@ function bindSetup(): void {
     app.screen = 'start'
     render()
   })
-  root().querySelector('#reroll')?.addEventListener('click', () => {
-    app.offeredGenerals = pickThreeGenerals()
-    app.generalId = app.offeredGenerals[0]
-    render()
-  })
   root().querySelector('#start-match')?.addEventListener('click', () => {
     void startFreeMatch()
   })
@@ -274,17 +231,18 @@ function bindSetup(): void {
 async function startFreeMatch(): Promise<void> {
   const mode = (root().querySelector('#mode') as HTMLSelectElement).value as GameMode
   const useEx = (root().querySelector('#ex') as HTMLInputElement).checked
-  const generalId = (root().querySelector('#general') as HTMLSelectElement).value
   app.setupMode = mode
   app.useEx = useEx
-  app.generalId = generalId
-  const config = buildFreeMatch({ mode, useEx, humanGeneralId: generalId })
+  const config = buildFreeMatch({
+    mode,
+    useEx,
+    forceSelectGeneral: app.settings.forceSelectGeneral,
+  })
   app.game = createMatch(config)
   app.selectedUid = null
   app.stage = null
   app.screen = 'table'
   render()
-  await continueAi()
 }
 
 function renderStoryList(): string {
@@ -405,7 +363,8 @@ function renderTable(): string {
   const g = app.game!
   const human = g.players.find((p) => p.isHuman)!
   const prompt = g.prompt
-  const isHumanTurn = prompt.actorId === human.id && !app.aiBusy
+  const picking = g.matchPhase === 'pick_general'
+  const isHumanTurn = prompt.actorId === human.id && !app.aiBusy && !picking
   const n = g.players.length
   const thinking =
     app.aiBusy && prompt.actorId !== null && !g.players[prompt.actorId]?.isHuman
@@ -416,19 +375,23 @@ function renderTable(): string {
   <div class="screen table-screen">
     <header class="battle-top">
       <div>
-        <strong>第 ${g.round} 輪</strong>
-        <span class="phase">${phaseName(g.phase)}</span>
+        <strong>${picking ? '選將階段' : `第 ${g.round} 輪`}</strong>
+        <span class="phase">${picking ? '請選擇武將' : phaseName(g.phase)}</span>
       </div>
-      <div class="deck-info">牌堆 ${g.deck.length}　棄牌 ${g.discard.length}</div>
+      <div class="deck-info">${picking ? `座位 ${n} 人` : `牌堆 ${g.deck.length}　棄牌 ${g.discard.length}`}</div>
     </header>
     ${thinking}
     <div class="arena" style="--n:${n}">
       ${g.players
         .map((p) => {
-          const gen = getGeneral(p.generalId)
-          const active = g.currentPlayer === p.id
+          const hasGen = !!p.generalId
+          const gen = hasGen ? getGeneral(p.generalId) : null
+          const active = !picking && g.currentPlayer === p.id
           const targetable =
-            prompt.kind === 'choose_target' && prompt.targetIds?.includes(p.id) && isHumanTurn
+            !picking &&
+            prompt.kind === 'choose_target' &&
+            prompt.targetIds?.includes(p.id) &&
+            isHumanTurn
           const visual = (p.id - human.id + n) % n
           const angle = (visual / n) * 360 + 90
           const distFromHuman =
@@ -443,22 +406,30 @@ function renderTable(): string {
                   ),
                 )
           const reach =
-            p.id !== human.id && p.alive && canReach(g, human.id, p.id) ? 'in-range' : ''
+            !picking && p.id !== human.id && p.alive && hasGen && canReach(g, human.id, p.id)
+              ? 'in-range'
+              : ''
           const idText = identityLabelVisible(p, human, g.config.mode)
-          const portrait = app.settings.showPortraits
-            ? `<img class="portrait" src="${portraitDataUri(gen.name, gen.kingdom, gen.gender)}" alt="" width="48" height="48" />`
+          const portrait =
+            app.settings.showPortraits && gen
+              ? `<img class="portrait" src="${portraitDataUri(gen.name, gen.kingdom, gen.gender)}" alt="" width="48" height="48" />`
+              : app.settings.showPortraits
+                ? `<div class="portrait portrait-empty" aria-hidden="true">？</div>`
+                : ''
+          const infoBtn = hasGen
+            ? `<button type="button" class="info-btn" data-info-seat="${p.id}" title="詳情" aria-label="詳情">ℹ</button>`
             : ''
           return `<div class="seat-wrap" style="--angle:${angle}deg" data-visual="${visual}">
-            <div class="seat ${p.alive ? '' : 'dead'} ${active ? 'active' : ''} ${p.isHuman ? 'human' : ''} ${targetable ? 'targetable' : ''} ${reach}" data-seat="${p.id}" role="${targetable ? 'button' : 'group'}" tabindex="${targetable ? '0' : '-1'}">
+            <div class="seat ${p.alive ? '' : 'dead'} ${active ? 'active' : ''} ${p.isHuman ? 'human' : ''} ${targetable ? 'targetable' : ''} ${reach} ${picking && !hasGen ? 'hidden-gen' : ''}" data-seat="${p.id}" role="${targetable ? 'button' : 'group'}" tabindex="${targetable ? '0' : '-1'}">
               ${portrait}
               <div class="seat-head">
-                <span class="seat-gen">${gen.name}</span>
-                <button type="button" class="info-btn" data-info-seat="${p.id}" title="詳情" aria-label="詳情">ℹ</button>
+                <span class="seat-gen">${gen ? gen.name : '未亮將'}</span>
+                ${infoBtn}
               </div>
               <div class="seat-name">${escapeHtml(p.name)}${idText ? `・${idText}` : ''}</div>
-              <div class="hp">${hearts(p.hp, p.maxHp)}</div>
-              <div class="equip">${equipText(p)}</div>
-              <div class="meta-row"><span>手牌 ${p.hand.length}</span><span class="dist">距 ${distFromHuman}</span></div>
+              <div class="hp">${hasGen ? hearts(p.hp, p.maxHp) : '—'}</div>
+              <div class="equip">${hasGen ? equipText(p) : picking ? '等待選將' : '無裝備'}</div>
+              <div class="meta-row"><span>手牌 ${picking ? '—' : p.hand.length}</span><span class="dist">距 ${distFromHuman}</span></div>
             </div>
           </div>`
         })
@@ -466,11 +437,15 @@ function renderTable(): string {
       <div class="arena-center" aria-hidden="true"><span>距離</span></div>
     </div>
     <div class="prompt-bar">${escapeHtml(prompt.message || '等待中…')}</div>
+    ${picking ? renderGeneralPickPanel(g) : ''}
     <div class="log">${[...g.log]
       .slice(-6)
       .map((l) => `<div>${escapeHtml(l.text)}</div>`)
       .join('')}</div>
-    <div class="hand">
+    ${
+      picking
+        ? ''
+        : `<div class="hand">
       ${human.hand
         .map((c) => {
           const def = getCardDef(c.defId)
@@ -493,24 +468,53 @@ function renderTable(): string {
           </div>`
         })
         .join('')}
-    </div>
+    </div>`
+    }
     <div class="actions">
       ${
-        isHumanTurn && prompt.kind === 'choose_card'
+        !picking && isHumanTurn && prompt.kind === 'choose_card'
           ? `<button type="button" class="btn" id="end-play">結束出牌</button>`
           : ''
       }
       ${
-        isHumanTurn && (prompt.kind === 'respond_shan' || prompt.kind === 'respond_sha')
+        !picking && isHumanTurn && (prompt.kind === 'respond_shan' || prompt.kind === 'respond_sha')
           ? `<button type="button" class="btn" id="pass-resp">放棄</button>`
           : ''
       }
       ${
-        isHumanTurn && prompt.kind === 'choose_target'
+        !picking && isHumanTurn && prompt.kind === 'choose_target'
           ? `<button type="button" class="btn" id="cancel-tgt">取消</button>`
           : ''
       }
       <button type="button" class="btn ghost" id="flee">退出</button>
+    </div>
+  </div>`
+}
+
+function renderGeneralPickPanel(g: GameSnapshot): string {
+  const ids = g.prompt.generalIds ?? []
+  const title = ids.length > 3 ? '選擇武將（全部可選）' : '系統隨機三將，請選一'
+  return `<div class="pick-panel">
+    <h3>${title}</h3>
+    <div class="pick-grid">
+      ${ids
+        .map((id) => {
+          const gen = getGeneral(id)
+          const portrait = app.settings.showPortraits
+            ? `<img class="pick-portrait" src="${portraitDataUri(gen.name, gen.kingdom, gen.gender)}" alt="" />`
+            : ''
+          return `<div class="pick-card">
+            ${portrait}
+            <div class="pick-name">${gen.name}</div>
+            <div class="pick-meta">${kingdomName(gen.kingdom)}・${gen.maxHp} 血</div>
+            <p class="pick-skill">${escapeHtml(gen.skillText)}</p>
+            <div class="pick-actions">
+              <button type="button" class="btn ghost" data-gen-info="${id}">詳情</button>
+              <button type="button" class="btn primary" data-pick-gen="${id}">選定</button>
+            </div>
+          </div>`
+        })
+        .join('')}
     </div>
   </div>`
 }
@@ -547,6 +551,9 @@ function typeName(t: string): string {
 }
 
 function seatDetailHtml(p: PlayerState): string {
+  if (!p.generalId) {
+    return `<h3>${escapeHtml(p.name)}</h3><p class="muted">尚未亮出武將。</p>`
+  }
   const gen = getGeneral(p.generalId)
   const equips = (['weapon', 'armor', 'horseMinus', 'horsePlus'] as const)
     .map((slot) => {
@@ -565,6 +572,14 @@ function seatDetailHtml(p: PlayerState): string {
     ${equips ? `<ul class="detail-list">${equips}</ul>` : '<p class="muted">無</p>'}`
 }
 
+function generalPickDetailHtml(id: string): string {
+  const gen = getGeneral(id)
+  return `<h3>${gen.name}</h3>
+    <p class="muted">${kingdomName(gen.kingdom)}・體力上限 ${gen.maxHp}・${gen.gender === 'female' ? '女' : '男'}</p>
+    <h4>武將技</h4>
+    <p>${escapeHtml(gen.skillText)}</p>`
+}
+
 function cardDetailHtml(uid: string, handOf: PlayerState): string {
   const card = handOf.hand.find((c) => c.uid === uid)
   if (!card) return '<p>找不到此牌</p>'
@@ -577,6 +592,7 @@ function cardDetailHtml(uid: string, handOf: PlayerState): string {
 async function continueAi(): Promise<void> {
   const g = app.game
   if (!g || app.aiBusy) return
+  if (g.matchPhase === 'pick_general') return
   app.aiBusy = true
   render()
   try {
@@ -593,6 +609,24 @@ async function continueAi(): Promise<void> {
 function bindTable(): void {
   const g = app.game!
   const human = g.players.find((p) => p.isHuman)!
+
+  root().querySelectorAll('[data-gen-info]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = (btn as HTMLElement).dataset.genInfo!
+      app.detailHtml = generalPickDetailHtml(id)
+      render()
+    })
+  })
+
+  root().querySelectorAll('[data-pick-gen]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = (btn as HTMLElement).dataset.pickGen!
+      confirmGeneralPick(g, id)
+      app.detailHtml = null
+      render()
+      void continueAi()
+    })
+  })
 
   root().querySelectorAll('[data-info-seat]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -616,7 +650,7 @@ function bindTable(): void {
 
   root().querySelectorAll('.card.selectable').forEach((btn) => {
     btn.addEventListener('click', () => {
-      if (app.aiBusy) return
+      if (app.aiBusy || g.matchPhase === 'pick_general') return
       const uid = (btn as HTMLElement).dataset.uid!
       selectCard(g, human.id, uid)
       app.selectedUid = null
@@ -626,7 +660,7 @@ function bindTable(): void {
 
   root().querySelectorAll('.seat.targetable').forEach((btn) => {
     btn.addEventListener('click', () => {
-      if (app.aiBusy) return
+      if (app.aiBusy || g.matchPhase === 'pick_general') return
       const id = Number((btn as HTMLElement).dataset.seat)
       selectTarget(g, human.id, id)
       void continueAi()
@@ -701,10 +735,6 @@ function bindResult(): void {
       app.screen = 'stage'
       render()
       return
-    }
-    if (!app.settings.forceSelectGeneral) {
-      app.offeredGenerals = pickThreeGenerals()
-      app.generalId = app.offeredGenerals[0]
     }
     app.screen = 'setup'
     render()
