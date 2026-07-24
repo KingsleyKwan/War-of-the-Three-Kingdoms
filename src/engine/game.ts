@@ -514,6 +514,10 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
     })
     log(state, `${p.name} 使用【桃園結義】。`)
     afterTrick(state, p)
+    const lord = state.players.find((pl) => pl.identity === 'lord' && pl.alive)
+    if (lord && healed.includes(lord.id)) {
+      observePublicEvent(state, { type: 'heal', sourceId: playerId, targetId: lord.id, kind: 'taoyuan' })
+    }
     setPlayPrompt(state)
     return
   }
@@ -539,6 +543,7 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
     })
     log(state, `${p.name} 使用【${def.name}】。`)
     afterTrick(state, p)
+    observePublicEvent(state, { type: 'aoe', sourceId: playerId, kind })
     resolveAOE(state, playerId, others.map((t) => t.id), kind === 'nanman' ? 'sha' : 'shan', def.name)
     return
   }
@@ -769,6 +774,7 @@ function finishTargetedCard(
     })
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【決鬥】。`)
     afterTrick(state, p)
+    observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId, kind: 'juedou' })
     resolveJuedou(state, playerId, targetId)
     return
   }
@@ -783,6 +789,7 @@ function finishTargetedCard(
     })
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【過河拆橋】。`)
     afterTrick(state, p)
+    observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId, kind: '過河拆橋' })
     askDismantle(state, playerId, targetId)
     return
   }
@@ -797,6 +804,7 @@ function finishTargetedCard(
     })
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【順手牽羊】。`)
     afterTrick(state, p)
+    observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId, kind: '順手牽羊' })
     beginZonePick(state, {
       actorId: playerId,
       ownerId: targetId,
@@ -818,6 +826,7 @@ function finishTargetedCard(
     })
     log(state, `${p.name} 對 ${state.players[targetId].name} 使用【火攻】。`)
     afterTrick(state, p)
+    observePublicEvent(state, { type: 'attack', sourceId: playerId, targetId, kind: 'huogong' })
     dealDamage(state, targetId, 1, playerId, 'fire')
     if (!isAwaitingZonePick(state)) setPlayPrompt(state)
     return
@@ -2110,6 +2119,15 @@ function dealDamage(
   pushDamageFx(state, targetId, amount)
   const natureLabel = nature === 'fire' ? '火焰' : nature === 'thunder' ? '雷電' : ''
   log(state, `${t.name} 受到 ${amount} 點${natureLabel}傷害（體力 ${Math.max(t.hp, 0)}）。`)
+
+  if (sourceId !== null && amount > 0) {
+    observePublicEvent(state, {
+      type: 'damage',
+      sourceId,
+      targetId,
+      amount,
+    })
+  }
 
   // After-damage skills that still apply while dying (e.g. 遺計 can draw 桃 before save)
   if (t.generalId) {

@@ -1352,6 +1352,73 @@ input {
   border-radius: 2px;
 }
 
+.mind-panel {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(196, 163, 90, 0.28);
+}
+
+.mind-panel h4 {
+  margin: 0 0 0.35rem;
+}
+
+.mind-pool {
+  margin: 0.35rem 0 0.65rem;
+  font-size: 0.88rem;
+  color: var(--gold);
+}
+
+.mind-row {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.6rem;
+  background: rgba(20, 14, 10, 0.55);
+  border: 1px solid rgba(196, 163, 90, 0.18);
+  border-radius: 2px;
+}
+
+.mind-target {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.mind-conf {
+  font-size: 0.75rem;
+  color: rgba(232, 220, 196, 0.45);
+}
+
+.mind-guess {
+  margin-top: 0.2rem;
+  color: rgba(255, 244, 214, 0.92);
+}
+
+.mind-exclude {
+  margin-top: 0.2rem;
+  font-size: 0.86rem;
+  color: #d48a7a;
+}
+
+.mind-note {
+  margin-top: 0.25rem;
+  font-size: 0.84rem;
+  color: rgba(232, 220, 196, 0.7);
+}
+
+.mind-evidence {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.78rem;
+  color: rgba(232, 220, 196, 0.55);
+  line-height: 1.4;
+}
+
+.mind-thought {
+  margin: 0.65rem 0 0;
+  font-size: 0.88rem;
+  color: rgba(255, 230, 170, 0.85);
+}
+
 .field input[type='text'],
 .field input[type='password'] {
   width: 100%;

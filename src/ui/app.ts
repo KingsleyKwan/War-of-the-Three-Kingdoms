@@ -1,5 +1,5 @@
 import { runAiUntilHuman } from '../ai/simple'
-import { formatMindDebug } from '../ai/mind'
+import { formatSeatMindHtml } from '../ai/mind'
 import { getCardDef } from '../data/cards'
 import {
   buildFreeMatch,
@@ -204,9 +204,9 @@ function renderSettings(): string {
       </label>
       <label class="field check">
         <input type="checkbox" id="ai-debug" ${s.showAiDebug ? 'checked' : ''} />
-        <span>對局中顯示 AI 身份推測／想法（除錯）</span>
+        <span>角色 ℹ 中顯示當下 AI 想法（身份推測一律可在 ℹ 查看）</span>
       </label>
-      <p class="hint">瀏覽器直連 API 需供應商允許 CORS；若失敗會自動退回內建 AI。</p>
+      <p class="hint">身份局中點座位 ℹ 可看該角色對他人的身份推測、排除項與人數池；內奸可能伪装。</p>
       <button type="button" class="btn primary" id="save-settings">儲存</button>
     </div>
   </div>`
@@ -518,11 +518,6 @@ function renderTable(): string {
       <div class="deck-info">${picking ? `座位 ${n} 人` : `牌堆 ${g.deck.length}　棄牌 ${g.discard.length}`}</div>
     </header>
     ${thinking}
-    ${
-      app.settings.showAiDebug
-        ? `<pre class="ai-debug">${escapeHtml(formatMindDebug(g))}</pre>`
-        : ''
-    }
     <div class="arena" style="--n:${n}" id="arena">
       ${g.players
         .map((p) => {
@@ -912,12 +907,34 @@ function seatDetailHtml(p: PlayerState): string {
     })
     .filter(Boolean)
     .join('')
+
+  const g = app.game
+  let mindHtml = ''
+  if (g && (g.config.mode === 'identity5' || g.config.mode === 'identity8')) {
+    mindHtml = formatSeatMindHtml(g, p.id)
+    // Hide live "thought" unless debug toggle on
+    if (!app.settings.showAiDebug) {
+      mindHtml = mindHtml.replace(/<p class="mind-thought">[\s\S]*?<\/p>/, '')
+    }
+  }
+
+  const idVisible =
+    g &&
+    (() => {
+      const human = g.players.find((x) => x.isHuman)
+      if (!human) return ''
+      const label = identityLabelVisible(p, human, g.config.mode)
+      return label ? `<p class="muted">公開身份資訊：${label}</p>` : ''
+    })()
+
   return `<h3>${gen.name}</h3>
-    <p class="muted">${kingdomName(gen.kingdom)}・${gen.maxHp} 血・${gen.gender === 'female' ? '女' : '男'}</p>
+    <p class="muted">${kingdomName(gen.kingdom)}・${gen.maxHp} 血・${gen.gender === 'female' ? '女' : '男'}・${escapeHtml(p.name)}</p>
+    ${idVisible ?? ''}
     <h4>武將技</h4>
     <p>${escapeHtml(gen.skillText)}</p>
     <h4>裝備</h4>
-    ${equips ? `<ul class="detail-list">${equips}</ul>` : '<p class="muted">無</p>'}`
+    ${equips ? `<ul class="detail-list">${equips}</ul>` : '<p class="muted">無</p>'}
+    ${mindHtml}`
 }
 
 function generalPickDetailHtml(id: string): string {
