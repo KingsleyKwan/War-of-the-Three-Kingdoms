@@ -2,7 +2,7 @@ import type { GeneralDef } from '../engine/types'
 
 /**
  * 風 / 火 / 林 / 山 / 一將成名.
- * Skills are mostly descriptive for now; mashu / a few passives wire into the engine.
+ * Expansion generals and their engine-backed skills.
  */
 export const EXPANSION_GENERALS: GeneralDef[] = [
   // —— 風 ——
@@ -12,9 +12,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wei',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['shensu'],
     pack: 'wind',
-    skillText: '神速（未完整）。',
+    skillText: '神速：摸牌階段前可跳過摸牌，令本回合【殺】無距離限制。',
   },
   {
     id: 'caoren',
@@ -22,9 +22,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wei',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['jushou'],
     pack: 'wind',
-    skillText: '據守（未完整）。',
+    skillText: '據守：出牌階段結束時可摸四張牌，然後跳過下回合出牌階段。',
   },
   {
     id: 'huangzhong',
@@ -52,9 +52,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wu',
     maxHp: 3,
     gender: 'female',
-    skills: [],
+    skills: ['tianxiang', 'hongyan'],
     pack: 'wind',
-    skillText: '天香／紅顏（未完整）。',
+    skillText: '天香：可棄紅桃手牌轉移傷害。紅顏：你的黑桃牌視為紅桃。',
   },
   {
     id: 'zhoutai',
@@ -72,9 +72,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'qun',
     maxHp: 3,
     gender: 'male',
-    skills: [],
+    skills: ['guhuo'],
     pack: 'wind',
-    skillText: '蠱惑（未完整）。',
+    skillText: '蠱惑：每回合限一次，將一張手牌當【殺】、【閃】、【桃】或【無中生有】。',
   },
   // —— 火 ——
   {
@@ -94,9 +94,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wei',
     maxHp: 3,
     gender: 'male',
-    skills: ['jieming'],
+    skills: ['quhu', 'jieming'],
     pack: 'fire',
-    skillText: '節命：受到傷害後，令一名角色摸X張（X為其已損失體力，至少1）。',
+    skillText: '驅虎：與體力較高角色拼點。節命：受到傷害後，令一名角色摸已損失體力數的牌。',
   },
   {
     id: 'pangtong',
@@ -104,9 +104,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'shu',
     maxHp: 3,
     gender: 'male',
-    skills: [],
+    skills: ['lianhuan', 'niepan'],
     pack: 'fire',
-    skillText: '連環／涅槃（未完整）。',
+    skillText: '連環：梅花牌可當【鐵索連環】。涅槃：限定一次，瀕死時棄所有牌，回覆至3體力並摸三張。',
   },
   {
     id: 'wolong',
@@ -114,9 +114,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'shu',
     maxHp: 3,
     gender: 'male',
-    skills: [],
+    skills: ['bazhen', 'huoji', 'kanpo'],
     pack: 'fire',
-    skillText: '八陣／火計／看破（未完整）。',
+    skillText: '八陣：無防具時視為裝備八卦陣。火計：紅牌可當【火攻】。看破：黑牌可當【無懈可擊】。',
   },
   {
     id: 'taishici',
@@ -124,9 +124,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wu',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['tianyi'],
     pack: 'fire',
-    skillText: '天義（未完整）。',
+    skillText: '天義：每回合限一次拼點；勝則本回合不限次數與距離使用【殺】，敗則不能使用【殺】。',
   },
   {
     id: 'pangde',
@@ -134,9 +134,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'qun',
     maxHp: 4,
     gender: 'male',
-    skills: ['mashu'],
+    skills: ['mashu', 'mengjin'],
     pack: 'fire',
-    skillText: '馬術：計算與其他角色距離-1。猛進（未完整）。',
+    skillText: '馬術：計算與其他角色距離-1。猛進：【殺】被閃避後棄置目標一張牌。',
   },
   {
     id: 'yanliangwenchou',
@@ -144,9 +144,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'qun',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['shuangxiong'],
     pack: 'fire',
-    skillText: '雙雄（未完整）。',
+    skillText: '雙雄：可跳過摸牌並判定，獲得判定牌，本回合可將異色牌當【決鬥】。',
   },
   // —— 林 ——
   {
@@ -155,9 +155,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wei',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['duanliang'],
     pack: 'forest',
-    skillText: '斷糧（未完整）。',
+    skillText: '斷糧：黑色基本牌或裝備牌可當【兵糧寸斷】，距離限制為2。',
   },
   {
     id: 'caopi',
@@ -165,9 +165,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wei',
     maxHp: 3,
     gender: 'male',
-    skills: ['xingshang'],
+    skills: ['xingshang', 'fangzhu'],
     pack: 'forest',
-    skillText: '行殤：其他角色死亡時，可摸兩張牌。放逐（未完整）。',
+    skillText: '行殤：其他角色死亡時摸兩張牌。放逐：受傷後令另一角色摸已損失體力數的牌並跳過下回合出牌階段。',
   },
   {
     id: 'menghuo',
@@ -175,9 +175,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'shu',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['huoshou', 'zaiqi'],
     pack: 'forest',
-    skillText: '禍首／再起（未完整）。',
+    skillText: '禍首：免疫南蠻並成為其傷害來源。再起：受傷時可用摸牌階段展示牌並以紅桃回復。',
   },
   {
     id: 'zhurong',
@@ -185,9 +185,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'shu',
     maxHp: 4,
     gender: 'female',
-    skills: [],
+    skills: ['juxiang', 'lieren'],
     pack: 'forest',
-    skillText: '巨象／烈刃（未完整）。',
+    skillText: '巨象：免疫南蠻，結算後摸一張。烈刃：【殺】造成傷害後拼點，勝則獲得目標一張手牌。',
   },
   {
     id: 'sunjian',
@@ -195,9 +195,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wu',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['yinghun'],
     pack: 'forest',
-    skillText: '英魂（未完整）。',
+    skillText: '英魂：準備階段若受傷，令一名角色摸已損失體力數的牌並棄一張。',
   },
   {
     id: 'lusu',
@@ -205,9 +205,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wu',
     maxHp: 3,
     gender: 'male',
-    skills: [],
+    skills: ['haoshi', 'dimeng'],
     pack: 'forest',
-    skillText: '好施／締盟（未完整）。',
+    skillText: '好施：多摸兩張，手牌過多時分一半給手牌最少角色。締盟：棄手牌差額並交換兩名角色手牌。',
   },
   {
     id: 'jiaxu',
@@ -215,9 +215,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'qun',
     maxHp: 3,
     gender: 'male',
-    skills: [],
+    skills: ['weimu', 'wansha', 'luanwu'],
     pack: 'forest',
-    skillText: '帷幕／完殺／亂武（未完整）。',
+    skillText: '帷幕：不能成為黑色指定目標錦囊的目標。完殺：你的回合僅你可救援瀕死角色。亂武：限定一次，其他角色失去1體力。',
   },
   // —— 山 ——
   {
@@ -226,9 +226,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wei',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['qiaobian'],
     pack: 'mountain',
-    skillText: '巧變（未完整）。',
+    skillText: '巧變：每回合限一次，棄一張牌並摸一張牌。',
   },
   {
     id: 'dengai',
@@ -236,9 +236,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wei',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['tuntian', 'zaoxian'],
     pack: 'mountain',
-    skillText: '屯田／鑿險（未完整）。',
+    skillText: '屯田：回合外失去手牌時獲得「田」並縮短距離。鑿險：三張田時覺醒並獲得【急襲】。',
   },
   {
     id: 'jiangwei',
@@ -246,9 +246,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'shu',
     maxHp: 4,
     gender: 'male',
-    skills: [],
+    skills: ['tiaoxin', 'zhiji'],
     pack: 'mountain',
-    skillText: '挑釁／志繼（未完整）。',
+    skillText: '挑釁：令攻擊範圍內角色對你出殺或棄牌。志繼：空手時覺醒，摸兩張並獲得【觀星】。',
   },
   {
     id: 'liushan',
@@ -256,9 +256,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'shu',
     maxHp: 3,
     gender: 'male',
-    skills: [],
+    skills: ['xiangle', 'fangquan'],
     pack: 'mountain',
-    skillText: '享樂／放權（未完整）。',
+    skillText: '享樂：殺你的角色須額外棄一張基本牌。放權：結束出牌並令另一角色摸兩張。',
   },
   {
     id: 'sunce',
@@ -266,9 +266,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wu',
     maxHp: 4,
     gender: 'male',
-    skills: ['jiang'],
+    skills: ['jiang', 'hunzi', 'zhiba'],
     pack: 'mountain',
-    skillText: '激昂：使用或成為【殺】／【決鬥】目標時摸一張牌。魂姿／制霸（未完整）。',
+    skillText: '激昂：使用或成為【殺】／【決鬥】目標時摸一張。魂姿：1體力時覺醒並獲得英姿、英魂。制霸：與每名角色各拼點一次，勝則摸一張。',
   },
   {
     id: 'zhangzhaozhanghong',
@@ -276,9 +276,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'wu',
     maxHp: 3,
     gender: 'male',
-    skills: [],
+    skills: ['zhijian', 'guzheng'],
     pack: 'mountain',
-    skillText: '直諫／固政（未完整）。',
+    skillText: '直諫：將手牌中的裝備置入另一角色裝備區並摸一張。固政：其他角色棄牌階段結束時摸一張。',
   },
   {
     id: 'zuoci',
@@ -286,9 +286,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'qun',
     maxHp: 3,
     gender: 'male',
-    skills: [],
+    skills: ['huashen', 'xinsheng'],
     pack: 'mountain',
-    skillText: '化身／新生（未完整）。',
+    skillText: '化身：首次行動時隨機獲得一項已實作技能。新生：受傷後重新隨機化身。',
   },
   {
     id: 'caiwenji',
@@ -296,9 +296,9 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     kingdom: 'qun',
     maxHp: 3,
     gender: 'female',
-    skills: [],
+    skills: ['beige', 'duanchang'],
     pack: 'mountain',
-    skillText: '悲歌／斷腸（未完整）。',
+    skillText: '悲歌：角色受殺傷害後棄牌判定並產生花色效果。斷腸：死亡時令殺手失去所有技能。',
   },
   // —— 一將成名 ——
   {

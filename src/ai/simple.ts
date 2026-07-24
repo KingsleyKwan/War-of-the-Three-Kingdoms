@@ -646,5 +646,43 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
     }
     return ids.includes('give') ? 'give' : ids[0] ?? null
   }
+  // Expansion prompts: prefer useful first options / hostiles
+  if (
+    key === 'shensu' ||
+    key === 'shuangxiong' ||
+    key === 'jushou' ||
+    key === 'tianxiang' ||
+    key === 'fangzhu' ||
+    key === 'yinghun' ||
+    key === 'haoshi_give' ||
+    key === 'beige'
+  ) {
+    if (ids.includes('yes') || ids.includes('shensu_skip') || ids.includes('skip_draw')) {
+      return (
+        ids.find((id) => id === 'yes' || id === 'shensu_skip' || id === 'skip_draw') ?? ids[0] ?? null
+      )
+    }
+    const hostiles = ids.filter((id) => {
+      if (id === 'skip' || id === 'no') return false
+      const n = Number(id)
+      return !Number.isNaN(n) && scoreAttackTarget(state, playerId, n) > 0
+    })
+    return hostiles[0] ?? ids.find((id) => id !== 'skip' && id !== 'no') ?? ids[0] ?? null
+  }
+  if (
+    key === 'tianyi_target' ||
+    key === 'quhu_target' ||
+    key === 'zhiba_target' ||
+    key === 'tiaoxin_target' ||
+    key === 'dimeng_target' ||
+    key === 'fangzhu_target' ||
+    key === 'tianxiang_target' ||
+    key === 'yinghun_target' ||
+    key === 'fangquan_target' ||
+    key === 'luanwu_target'
+  ) {
+    const hostiles = ids.filter((id) => scoreAttackTarget(state, playerId, Number(id)) > 0)
+    return hostiles[0] ?? ids[0] ?? null
+  }
   return choices[0].id
 }

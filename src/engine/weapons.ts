@@ -1,5 +1,6 @@
 import { getCardDef } from '../data/cards'
 import { getGeneral } from '../data/generals'
+import { playerSkills } from './helpers'
 import type { CardInstance, EquipSlot, GameSnapshot, PlayerState } from './types'
 import { isRedCard } from './helpers'
 
@@ -10,8 +11,9 @@ export function weaponKind(p: PlayerState): string | null {
 
 /** True if this seat may still use 【殺】 this turn (諸葛連弩／咆哮 allow extras). */
 export function mayUseSha(p: PlayerState): boolean {
+  if (p.tianyiLose) return false
   if (!p.shaUsedThisTurn) return true
-  if (p.generalId && getGeneral(p.generalId).skills.includes('paoxiao')) return true
+  if (p.tianyiWin || playerSkills(p).includes('paoxiao')) return true
   return weaponKind(p) === 'zhuge'
 }
 

@@ -83,6 +83,32 @@ export interface PlayerState {
   rendeCount?: number
   /** Temporary flags */
   skipNextShaLimit?: boolean
+  chained?: boolean
+  skipNextPlay?: boolean
+  /** 神速：本回合殺無視距離 */
+  shensuNoDist?: boolean
+  /** 雙雄：本回合此顏色可當決鬥 */
+  shuangxiongAs?: 'red' | 'black'
+  guhuoUsed?: boolean
+  luanwuUsed?: boolean
+  niepanUsed?: boolean
+  zhijiAwakened?: boolean
+  hunziAwakened?: boolean
+  zaoxianAwakened?: boolean
+  /** 屯田牌（簡化：每張距離-1） */
+  tianCount?: number
+  tiaoxinUsed?: boolean
+  dimengUsed?: boolean
+  qiaobianUsed?: boolean
+  zhibaUsedOn?: number[]
+  fangquanUsed?: boolean
+  tianyiUsed?: boolean
+  tianyiWin?: boolean
+  tianyiLose?: boolean
+  quhuUsed?: boolean
+  /** 技能被斷腸清空 */
+  skillsDisabled?: boolean
+  extraSkills?: string[]
 }
 
 export type PromptKind =

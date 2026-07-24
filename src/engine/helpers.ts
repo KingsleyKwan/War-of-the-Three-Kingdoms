@@ -1,4 +1,4 @@
-import type { CardInstance, EquipSlot, GameSnapshot, PlayerState } from './types'
+import type { CardInstance, EquipSlot, GameSnapshot, PlayerState, Suit } from './types'
 import { getCardDef } from '../data/cards'
 import { getGeneral } from '../data/generals'
 
@@ -43,14 +43,18 @@ export function distanceMod(p: PlayerState): { minus: number; plus: number } {
   if (p.equips.horseMinus) minus++
   // +1 坐騎（如的盧）：其他角色與你的距離 +1
   if (p.equips.horsePlus) plus++
-  if (p.generalId) {
-    try {
-      if (getGeneral(p.generalId).skills.includes('mashu')) minus++
-    } catch {
-      /* ignore unknown general */
-    }
-  }
+  if (playerSkills(p).includes('mashu')) minus++
+  minus += Math.min(3, p.tianCount ?? 0)
   return { minus, plus }
+}
+
+export function playerSkills(p: PlayerState): string[] {
+  if (!p.generalId || p.skillsDisabled) return []
+  try {
+    return [...new Set([...getGeneral(p.generalId).skills, ...(p.extraSkills ?? [])])]
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -115,6 +119,21 @@ export function isRedCard(card: CardInstance): boolean {
   return suit === 'heart' || suit === 'diamond'
 }
 
+export function effectiveSuit(card: CardInstance, owner?: PlayerState): Suit | undefined {
+  const suit = getCardDef(card.defId).suit
+  return owner && playerSkills(owner).includes('hongyan') && suit === 'spade' ? 'heart' : suit
+}
+
+export function isRedFor(owner: PlayerState, card: CardInstance): boolean {
+  const suit = effectiveSuit(card, owner)
+  return suit === 'heart' || suit === 'diamond'
+}
+
+export function isBlackFor(owner: PlayerState, card: CardInstance): boolean {
+  const suit = effectiveSuit(card, owner)
+  return suit === 'spade' || suit === 'club'
+}
+
 export function isBlackCard(card: CardInstance): boolean {
   const suit = getCardDef(card.defId).suit
   return suit === 'spade' || suit === 'club'
@@ -122,18 +141,18 @@ export function isBlackCard(card: CardInstance): boolean {
 
 export function effectiveKind(player: PlayerState, card: CardInstance): string {
   const kind = cardKind(card)
-  const skills = getGeneral(player.generalId).skills
-  if (skills.includes('wusheng') && isRedCard(card) && kind !== 'sha') {
+  const skills = playerSkills(player)
+  if (skills.includes('wusheng') && isRedFor(player, card) && kind !== 'sha') {
     // optional convert — handled at play time via playAs
   }
   if (skills.includes('longdan')) {
     if (kind === 'sha') return 'sha' // can also be shan when responding
     if (kind === 'shan') return 'shan'
   }
-  if (skills.includes('qingguo') && !isRedCard(card) && kind !== 'shan') {
+  if (skills.includes('qingguo') && isBlackFor(player, card) && kind !== 'shan') {
     // black as shan when responding
   }
-  if (skills.includes('jijiu') && isRedCard(card)) {
+  if (skills.includes('jijiu') && isRedFor(player, card)) {
     // red as tao when saving
   }
   return kind

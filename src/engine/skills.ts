@@ -1,7 +1,7 @@
 import { getGeneral } from '../data/generals'
 import { getCardDef } from '../data/cards'
 import type { GameSnapshot, PlayerState } from './types'
-import { attackRangeOf, canReach, getDistance } from './helpers'
+import { attackRangeOf, canReach, getDistance, playerSkills } from './helpers'
 import { mayUseSha, weaponKind } from './weapons'
 
 export interface SkillAction {
@@ -15,7 +15,7 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
   const p = state.players[playerId]
   if (!p?.alive || state.phase !== 'play' || state.currentPlayer !== playerId) return []
   if (state.prompt.kind !== 'choose_card') return []
-  const skills = getGeneral(p.generalId).skills
+  const skills = playerSkills(p)
   const actions: SkillAction[] = []
 
   if (skills.includes('kurou') && p.hp > 0) {
@@ -81,6 +81,47 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
       actions.push({ id: 'fanjian', label: '反間', hint: '交給一名角色一張牌並令其猜花色' })
     }
   }
+  if (skills.includes('guhuo') && !p.guhuoUsed && p.hand.length > 0) {
+    actions.push({ id: 'guhuo', label: '蠱惑', hint: '將一張手牌當殺、閃、桃或無中生有' })
+  }
+  if (skills.includes('tianyi') && !p.tianyiUsed && p.hand.length > 0) {
+    const targets = state.players.some((t) => t.alive && t.id !== playerId && t.hand.length > 0)
+    if (targets) actions.push({ id: 'tianyi', label: '天義', hint: '與一名角色拼點' })
+  }
+  if (skills.includes('quhu') && !p.quhuUsed && p.hand.length > 0) {
+    const targets = state.players.some(
+      (t) => t.alive && t.id !== playerId && t.hp > p.hp && t.hand.length > 0,
+    )
+    if (targets) actions.push({ id: 'quhu', label: '驅虎', hint: '與體力較高角色拼點' })
+  }
+  if (skills.includes('tiaoxin') && !p.tiaoxinUsed) {
+    actions.push({ id: 'tiaoxin', label: '挑釁', hint: '令攻擊範圍內角色出殺或棄牌' })
+  }
+  if (skills.includes('dimeng') && !p.dimengUsed && p.hand.length > 0) {
+    actions.push({ id: 'dimeng', label: '締盟', hint: '棄手牌並交換兩名角色手牌' })
+  }
+  if (skills.includes('luanwu') && !p.luanwuUsed) {
+    actions.push({ id: 'luanwu', label: '亂武', hint: '其他角色依次失去1點體力' })
+  }
+  if (skills.includes('qiaobian') && !p.qiaobianUsed && p.hand.length > 0) {
+    actions.push({ id: 'qiaobian', label: '巧變', hint: '棄一張牌並摸一張牌' })
+  }
+  if (skills.includes('fangquan') && !p.fangquanUsed) {
+    actions.push({ id: 'fangquan', label: '放權', hint: '結束出牌並令一名其他角色摸兩張' })
+  }
+  if (skills.includes('jixi') && (p.tianCount ?? 0) > 0) {
+    actions.push({ id: 'jixi', label: '急襲', hint: '消耗一張田，視為使用順手牽羊' })
+  }
+  if (skills.includes('zhijian')) {
+    const hasEquip = p.hand.some((c) => getCardDef(c.defId).type === 'equip')
+    if (hasEquip) actions.push({ id: 'zhijian', label: '直諫', hint: '將裝備交給其他角色並摸一張' })
+  }
+  if (skills.includes('zhiba')) {
+    const unused = state.players.some(
+      (t) => t.alive && t.id !== playerId && !(p.zhibaUsedOn ?? []).includes(t.id) && t.hand.length,
+    )
+    if (unused && p.hand.length) actions.push({ id: 'zhiba', label: '制霸', hint: '與一名角色拼點' })
+  }
   if (weaponKind(p) === 'zhangba' && p.hand.length >= 2 && mayUseSha(p)) {
     const canHit = state.players.some(
       (t) => t.alive && t.id !== playerId && canReach(state, playerId, t.id),
@@ -97,6 +138,5 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
 }
 
 export function hasSkill(p: PlayerState, id: string): boolean {
-  if (!p.generalId) return false
-  return getGeneral(p.generalId).skills.includes(id)
+  return playerSkills(p).includes(id)
 }
