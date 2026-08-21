@@ -6358,6 +6358,8 @@ function advanceTurn(state: GameSnapshot): void {
   }
   if (next <= state.currentPlayer) state.round++
   state.currentPlayer = next
+  checkVictory(state)
+  if (state.winnerIds) return
   beginTurn(state)
 }
 

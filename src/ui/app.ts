@@ -455,7 +455,9 @@ function renderStageBrief(): string {
       <p class="intel-pack">勝利：${
         s.victory.type === 'kill_target'
           ? `擊殺 ${getGeneral(s.victory.targetGeneralId!).name}`
-          : '殲滅敵軍'
+          : s.victory.type === 'survive_rounds'
+            ? `堅守突圍 ${s.victory.rounds ?? 4} 輪（或擊潰追兵）`
+            : '殲滅敵軍'
       }</p>
     </section>`
 

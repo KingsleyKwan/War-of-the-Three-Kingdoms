@@ -24,19 +24,19 @@ export const CAMPAIGNS: CampaignDef[] = [
   {
     id: CAOCAO_CAMPAIGN_ID,
     title: '曹操傳',
-    blurb: '潁川至赤壁・魏武崛起',
+    blurb: '潁川至漢中・魏武崛起',
     stages: CAOCAO_STAGES,
   },
   {
     id: SHU_CAMPAIGN_ID,
     title: '蜀傳',
-    blurb: '桃園至定軍・漢昭烈之路',
+    blurb: '桃園至南征・漢昭烈之路',
     stages: SHU_STAGES,
   },
   {
     id: WU_CAMPAIGN_ID,
     title: '吳傳',
-    blurb: '討董至赤壁・江東基業',
+    blurb: '討董至夷陵・江東基業',
     stages: WU_STAGES,
   },
 ]

@@ -362,4 +362,14 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     pack: 'standard',
     skillText: '關卡敵將。',
   },
+  {
+    id: 'liuzhang',
+    name: '劉璋',
+    kingdom: 'qun',
+    maxHp: 4,
+    gender: 'male',
+    skills: [],
+    pack: 'standard',
+    skillText: '關卡敵將。益州牧，優柔寡斷。',
+  },
 ]

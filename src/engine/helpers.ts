@@ -214,6 +214,34 @@ export function checkVictory(state: GameSnapshot): void {
     return
   }
 
+  if (rule?.type === 'survive_rounds' && rule.rounds) {
+    const human = state.players.find((p) => p.isHuman)
+    if (!human) return
+    const foes = state.players.filter((p) => {
+      if (!p.alive || p.id === human.id) return false
+      if (human.side) return p.side === 'enemy'
+      return !p.isHuman
+    })
+    if (!human.alive) {
+      state.winnerIds = foes.map((p) => p.id)
+      state.resultMessage = '敗戰……突圍失敗。'
+      state.prompt = { kind: 'game_over', message: state.resultMessage, actorId: null }
+      return
+    }
+    if (foes.length === 0) {
+      state.winnerIds = [human.id]
+      state.resultMessage = '勝利！追兵已潰，成功突圍。'
+      state.prompt = { kind: 'game_over', message: state.resultMessage, actorId: null }
+      return
+    }
+    if (state.round > rule.rounds) {
+      state.winnerIds = [human.id]
+      state.resultMessage = `勝利！苦戰 ${rule.rounds} 輪，成功突圍。`
+      state.prompt = { kind: 'game_over', message: state.resultMessage, actorId: null }
+    }
+    return
+  }
+
   if (rule?.type === 'kill_target' && rule.targetGeneralId) {
     const target = state.players.find((p) => p.generalId === rule.targetGeneralId)
     const human = state.players.find((p) => p.isHuman)

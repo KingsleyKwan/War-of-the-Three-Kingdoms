@@ -351,7 +351,7 @@ function main(): void {
   printCatalogSummary()
 
   const pickable = GENERALS.filter(
-    (g) => !['soldier', 'huaxiong', 'zhangxiu', 'yuanshao'].includes(g.id),
+    (g) => !['soldier', 'huaxiong', 'zhangxiu', 'yuanshao', 'yanbaihu', 'liubiao', 'liuzhang'].includes(g.id),
   )
 
   console.log('\n== 10 AI matches ==')

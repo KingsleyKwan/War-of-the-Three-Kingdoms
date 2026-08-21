@@ -34,6 +34,15 @@ export const CAMPAIGN_CITIES: Record<string, CampaignCity> = {
   chengdu: { id: 'chengdu', name: '成都', x: 22, y: 78 },
   hanzhong: { id: 'hanzhong', name: '漢中', x: 32, y: 62 },
   dingjun: { id: 'dingjun', name: '定軍山', x: 30, y: 66 },
+  xiapi: { id: 'xiapi', name: '下邳', x: 80, y: 46 },
+  tongguan: { id: 'tongguan', name: '潼關', x: 34, y: 46 },
+  hefei: { id: 'hefei', name: '合肥', x: 72, y: 64 },
+  yiling: { id: 'yiling', name: '夷陵', x: 54, y: 86 },
+  changban: { id: 'changban', name: '當陽', x: 50, y: 80 },
+  fu: { id: 'fu', name: '涪城', x: 26, y: 72 },
+  nanzhong: { id: 'nanzhong', name: '南中', x: 24, y: 92 },
+  xiangyang: { id: 'xiangyang', name: '襄陽', x: 51, y: 68 },
+  ruxu: { id: 'ruxu', name: '濡須', x: 70, y: 72 },
 }
 
 export const FACTION_COLORS: Record<string, string> = {
@@ -49,6 +58,10 @@ export const FACTION_COLORS: Record<string, string> = {
   孫策: '#2c6b4a',
   劉備: '#8b3a3a',
   劉表: '#6b5a3a',
+  劉璋: '#7a5a38',
+  西涼: '#4d6a7a',
+  馬超: '#3d5a6a',
+  孟獲: '#3d6b3a',
   聯軍: '#5a6a7a',
   未定: '#5a5348',
 }

@@ -323,6 +323,7 @@ export function listGeneralsForPick(packs?: PackId[]): GeneralDef[] {
     'yuanshao',
     'yanbaihu',
     'liubiao',
+    'liuzhang',
   ])
   const packSet = packs?.length ? new Set(packs) : null
   return GENERALS.filter((g) => {

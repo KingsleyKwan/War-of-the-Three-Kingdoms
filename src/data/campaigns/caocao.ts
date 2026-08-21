@@ -26,7 +26,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
       { fromCityId: 'yingchuan', toCityId: 'xuchang', actor: '張角餘黨', note: '據地爲亂' },
     ],
     briefing:
-      '中平元年，黃巾餘黨盤據潁川。夜色沉沉，營火遠近明滅。\n曹操勒馬陣前，望見敵旌上「張角」二字，心中暗忖：此戰若不能速勝，黃巾勢必復燃。\n「傳令——全軍聽令，破敵立威！」\n鼓聲驟起，鐵騎踏破荒草，直指敵陣。',
+      '中平元年，黃巾餘黨盤據潁川。夜色沉沉，營火遠近明滅。\n曹操勒馬陣前，望見敵旌上「張角」二字，心中暗忖：此戰若不能速勝，黃巾勢必復燃。\n帳中夏侯惇請戰：「兄長但發號令，惇願為先鋒。」曹操點頭：「破敵立威，在此一舉。」\n「傳令——全軍聽令！」鼓聲驟起，鐵騎踏破荒草，直指敵陣。',
     epilogueWin:
       '潁川煙塵漸散。黃巾旗折，亂兵四散入林。\n曹操收刀入鞘，望向洛陽方向——這一仗，只是起步。關東烽火將起，亂世才剛揭幕。',
     epilogueLose:
@@ -61,7 +61,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     ],
     prevLink: '潁川破黃巾後，曹操聲名漸起。董卓亂政，關東盟軍會師——下一刀，砍向汜水關。',
     briefing:
-      '關東聯軍討董，汜水關前卻連折數將。華雄刀下無人能敵，軍中人人色變。\n曹操拍案而起：「華雄不過一偏將耳！我願親往，試其鋒銳。」\n夜霧未散，關前號角低鳴。此行只為斬將奪旗，以振聯軍士氣。',
+      '關東聯軍討董，汜水關前卻連折數將。華雄刀下無人能敵，軍中人人色變。\n帳中諸侯面面相覷。曹操拍案而起：「華雄不過一偏將耳！我願親往，試其鋒銳。」\n夏侯惇執轡相隨：「主公既出，惇豈可獨留？」\n夜霧未散，關前號角低鳴。此行只為斬將奪旗，以振聯軍士氣。',
     epilogueWin:
       '華雄旗倒，汜水關鼓聲一頓。聯軍士氣大振，帳中紛紛舉杯。\n曹操卻未久留——他知董卓主力尚在虎牢、洛陽，此勝只換得一息進攻之機。',
     epilogueLose:
@@ -98,7 +98,7 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     ],
     prevLink: '汜水關斬華雄後，聯軍內訌、董卓西遷。曹操立足未穩，呂布已自兖州殺來濮陽。',
     briefing:
-      '呂布奪兖州，鐵騎直逼濮陽。城頭風急，旗角撕裂如紙。\n曹操與典韋、許褚立於垛口，望見呂布赤兔如電，心知此戰不可退。\n「守住城池——今夜，濮陽不能落！」\n箭雨將至，城門緊閉，決戰開始。',
+      '呂布奪兖州，鐵騎直逼濮陽。城頭風急，旗角撕裂如紙。\n曹操與典韋、許褚立於垛口，望見呂布赤兔如電，心知此戰不可退。\n許褚咬牙：「人中呂布，馬中赤兔——今日便試他是人是鬼。」\n「守住城池——今夜，濮陽不能落！」箭雨將至，城門緊閉，決戰開始。',
     epilogueWin:
       '濮陽城頭火光漸熄。呂布引殘騎北撤，兖州危局暫緩。\n曹操撫城垛而立：亂世爭雄，先要有一塊能站穩的土。',
     epilogueLose:
@@ -136,19 +136,19 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     ],
     prevLink: '濮陽卻呂布後，曹操根基漸穩。南陽張繡據宛，曹操親征，欲一舉收服。',
     briefing:
-      '宛城外，曹軍大營連綿。張繡出降，帳中酒宴尚溫，夜色卻忽然變了。\n刀光自營門起，火光映得半邊天赤。\n曹操拔劍大呼：「保護中軍——張繡反了！」',
+      '宛城外，曹軍大營連綿。張繡出降，帳中酒宴尚溫，夜色卻忽然變了。\n賈詡立於暗處，只道：「事已至此，唯有一搏。」刀光自營門起，火光映得半邊天赤。\n典韋怒吼著擋在中軍帳前，雙戟橫掃。曹操拔劍大呼：「保護中軍——張繡反了！」',
     epilogueWin:
       '宛城火勢被壓下，張繡敗走。曹操衣甲猶有焦痕，望著南天沉默良久。\n這一仗提醒他：亂世不止刀槍，還有人心與計謀。',
     epilogueLose:
       '夜襲得手，曹營大亂。曹操倉皇突圍，身後是燃燒的旗幟與未竟的南征。\n若宛城之恥不雪，許昌亦難安枕。',
-    bridgeNext: '北方袁紹勢力日盛，官渡一線遲早一戰。曹操收攏兵馬，目光轉向河北。',
-    packs: ['standard', 'ex'],
+    bridgeNext: '南陽未穩，呂布又在徐州作亂。下邳白門樓，將是奉先的終局。',
+    packs: ['standard', 'ex', 'forest'],
     playerGeneralId: 'caocao',
     allies: [{ generalId: 'dianwei', name: '典韋' }],
     allyChoices: ['xuchu', 'xiahoudun', 'guojia'],
     enemies: [
       { generalId: 'zhangxiu', name: '張繡' },
-      { generalId: 'simayi', name: '賈詡' },
+      { generalId: 'jiaxu', name: '賈詡' },
       { generalId: 'soldier', name: '宛城兵' },
       { generalId: 'soldier', name: '宛城兵' },
     ],
@@ -157,6 +157,44 @@ export const CAOCAO_STAGES: CampaignStage[] = [
   {
     id: 'cc_05',
     index: 5,
+    title: '白門樓',
+    subtitle: '呂布末路',
+    era: '建安三年',
+    battlefieldCityId: 'xiapi',
+    cityFactions: {
+      xiapi: '呂布',
+      xuzhou: '呂布',
+      xuchang: '曹操',
+      puyang: '曹操',
+      yanzhou: '曹操',
+    },
+    movements: [
+      { fromCityId: 'xuchang', toCityId: 'xiapi', actor: '曹操', note: '圍下邳' },
+      { fromCityId: 'xuzhou', toCityId: 'xiapi', actor: '呂布', note: '困守白門' },
+    ],
+    prevLink: '宛城驚魂未定，呂布據徐州反覆無常。曹操與劉備合兵，水淹下邳，兵臨白門樓。',
+    briefing:
+      '下邳被困數旬，泗水灌城，街巷皆成澤國。呂布雖勇，卻疑部下、疏謀士，城中已有離心。\n曹操立於土山，望白門樓旗角：「奉先再降，終是禍根。今日，必絕此患。」\n帳中荀彧低聲：「呂布有勇無謀。主公但緊圍，城破只在朝夕。」\n城頭赤兔悲鳴，畫戟的影子投在水面上，像一條走投無路的龍。',
+    epilogueWin:
+      '白門樓絞索升起。呂布既死，山東震動。曹操回望下邳，知此後中原再無「人中呂布」。\n劉備立於側後，神色難辨——這一步，改變的不只是呂布的命運。',
+    epilogueLose:
+      '呂布突圍成功，白門之圍反潰。曹操收兵，衣甲盡濕。\n若奉先復起，兖徐難安，河北亦將有所恃。',
+    bridgeNext: '呂布既除，北方只餘袁紹。官渡的黃沙，已在眼前。',
+    packs: ['standard', 'ex'],
+    playerGeneralId: 'caocao',
+    allies: [{ generalId: 'xunyu', name: '荀彧' }],
+    allyChoices: ['guojia', 'xiahoudun', 'liubei'],
+    enemies: [
+      { generalId: 'lvbu', name: '呂布' },
+      { generalId: 'diaochan', name: '貂蟬' },
+      { generalId: 'soldier', name: '陳宮' },
+      { generalId: 'soldier', name: '并州兵' },
+    ],
+    victory: { type: 'kill_target', targetGeneralId: 'lvbu' },
+  },
+  {
+    id: 'cc_06',
+    index: 6,
     title: '官渡之戰',
     subtitle: '決戰河北',
     era: '建安五年',
@@ -173,30 +211,29 @@ export const CAOCAO_STAGES: CampaignStage[] = [
       { fromCityId: 'ye', toCityId: 'guandu', actor: '袁紹', note: '大軍南下' },
       { fromCityId: 'xuchang', toCityId: 'guandu', actor: '曹操', note: '以少敵眾' },
     ],
-    prevLink: '宛城驚魂之後，北方袁紹傾巢南下。曹操屯兵官渡，背靠許昌，決一死戰。',
+    prevLink: '白門樓後，北方袁紹傾巢南下。曹操屯兵官渡，背靠許昌，決一死戰。',
     briefing:
-      '官渡黃沙漫天，袁軍營寨望不到邊。曹操帳中燭火搖晃，諸將面色凝重。\n「彼眾我寡，然糧道可斷、士氣可奪。今晚，只許勝，不許退。」\n夜風掠過河岸，戰鼓自遠而近。',
+      '官渡黃沙漫天，袁軍營寨望不到邊。曹操帳中燭火搖晃，諸將面色凝重。\n郭嘉附耳：「紹外寬內忌，兵多而無斷。糧在烏巢，可劫也。」\n曹操握劍：「彼眾我寡，然糧道可斷、士氣可奪。今晚，只許勝，不許退。」\n夜風掠過河岸，戰鼓自遠而近。河北與中原，將在此分出輕重。',
     epilogueWin:
       '袁軍崩潰，河北震動。曹操於官渡高崗遠望鄴城方向，知天下重心已悄然南移。\n許昌燈火，比往日更亮一分。',
     epilogueLose:
       '官渡防線崩裂，曹軍北退。許昌告急之聲不絕於耳。\n若袁紹長驅而入，曹操傳的下半部，恐無從寫起。',
     bridgeNext: '北方稍定，江東孫權與劉備卻在長江聯手。赤壁的東風，已經在吹。',
-    packs: ['standard', 'ex'],
+    packs: ['standard', 'ex', 'fire'],
     playerGeneralId: 'caocao',
     allies: [{ generalId: 'xunyu', name: '荀彧' }],
     allyChoices: ['guojia', 'xiahoudun', 'zhangliao'],
     enemies: [
       { generalId: 'yuanshao', name: '袁紹' },
-      { generalId: 'soldier', name: '顏良' },
-      { generalId: 'soldier', name: '文醜' },
+      { generalId: 'yanliangwenchou', name: '顏良文醜' },
       { generalId: 'soldier', name: '河北軍' },
       { generalId: 'soldier', name: '河北軍' },
     ],
     victory: { type: 'kill_target', targetGeneralId: 'yuanshao' },
   },
   {
-    id: 'cc_06',
-    index: 6,
+    id: 'cc_07',
+    index: 7,
     title: '赤壁之戰',
     subtitle: '江東烽火',
     era: '建安十三年',
@@ -215,12 +252,12 @@ export const CAOCAO_STAGES: CampaignStage[] = [
     ],
     prevLink: '官渡勝後，曹操威震北方。八十萬大軍號稱南下，江面之上，東風將起。',
     briefing:
-      '長江浩渺，曹軍樓船連營。對岸周瑜、孫權旗號鮮明，火油之氣隱隱可聞。\n曹操立於船頭：「破江東，天下可定！」\n水聲拍舷，火光將在今夜決定南北之勢。',
+      '長江浩渺，曹軍樓船連營。對岸周瑜、孫權旗號鮮明，火油之氣隱隱可聞。\n謀士有諫：「連環雖穩，恐忌火攻。」曹操大笑：「隆冬之際，安得東風？」\n許褚按刀立於船側。曹操望南岸：「破江東，天下可定！」\n水聲拍舷。火光將在今夜決定南北之勢。',
     epilogueWin:
       '江面殘焰漸熄。曹軍雖疲，旗幟仍在。曹操望著南岸，知此勝不過一時——江東根深，未可輕言一統。',
     epilogueLose:
       '東風起，連營火。樓船傾覆，北軍大潰。曹操敗走華容道方向，衣甲盡濕。\n赤壁一敗，南北對峙之局就此定下。',
-    bridgeNext: '曹操傳暫告一段落。亂世未盡，更多關卡將隨後續擴充而至。',
+    bridgeNext: '南征受挫，西涼卻傳來馬超為父報仇之訊。潼關以外，鐵騎如潮。',
     packs: ['standard', 'ex'],
     requiredCardKinds: ['火殺', 'tiesuo', 'huogong'],
     excludeCardKinds: ['lebu', 'bingliang'],
@@ -233,6 +270,82 @@ export const CAOCAO_STAGES: CampaignStage[] = [
       { generalId: 'zhaoyun', name: '趙雲' },
       { generalId: 'soldier', name: '江東水軍' },
       { generalId: 'soldier', name: '江東水軍' },
+    ],
+    victory: { type: 'eliminate_enemies' },
+  },
+  {
+    id: 'cc_08',
+    index: 8,
+    title: '潼關之戰',
+    subtitle: '西涼馬超',
+    era: '建安十六年',
+    battlefieldCityId: 'tongguan',
+    cityFactions: {
+      tongguan: '馬超',
+      changan: '曹操',
+      luoyang: '曹操',
+      xuchang: '曹操',
+      hanzhong: '未定',
+    },
+    movements: [
+      { fromCityId: 'changan', toCityId: 'tongguan', actor: '曹操', note: '西征馬超' },
+      { fromCityId: 'hanzhong', toCityId: 'tongguan', actor: '馬超', note: '為父報仇' },
+    ],
+    prevLink: '赤壁之後，曹操無力再下江東。馬騰既死，馬超盡起西涼之兵，直撲潼關。',
+    briefing:
+      '潼關外黃塵蔽日，西涼鐵騎如浪。馬超銀槍點地，隔河大呼：「曹賊還我父命！」\n曹操立於高岸，須髮被風吹起。許褚已脫甲：「主公勿憂，某去會會這廝。」\n賈詡袖手：「可離間韓遂、馬超。西涼兵雖勇，心不齊則自潰。」\n號角撕裂河谷。這一戰，關中存亡所繫。',
+    epilogueWin:
+      '馬超敗走隴西。曹操入關中，於馬上回望潼關殘壘：「馬兒不死，吾死無葬地也。」\n西陲暫定，漢中的門戶，卻仍未打開。',
+    epilogueLose:
+      '西涼騎衝破潼關。曹操割鬚棄袍而走，關中震動。\n若馬超長驅入洛，許昌亦將不穩。',
+    bridgeNext: '關中稍安，漢中張魯已降。劉備卻自成都北上，要與曹操爭這塊天府門戶。',
+    packs: ['standard', 'ex', 'fire'],
+    playerGeneralId: 'caocao',
+    allies: [{ generalId: 'xuchu', name: '許褚' }],
+    allyChoices: ['jiaxu', 'xiahoudun', 'zhangliao'],
+    enemies: [
+      { generalId: 'machao', name: '馬超' },
+      { generalId: 'pangde', name: '龐德' },
+      { generalId: 'soldier', name: '韓遂' },
+      { generalId: 'soldier', name: '西涼騎' },
+    ],
+    victory: { type: 'kill_target', targetGeneralId: 'machao' },
+  },
+  {
+    id: 'cc_09',
+    index: 9,
+    title: '漢中之戰',
+    subtitle: '雞肋難嚥',
+    era: '建安二十四年',
+    battlefieldCityId: 'hanzhong',
+    cityFactions: {
+      hanzhong: '劉備',
+      dingjun: '劉備',
+      changan: '曹操',
+      chengdu: '劉備',
+      xuchang: '曹操',
+    },
+    movements: [
+      { fromCityId: 'changan', toCityId: 'hanzhong', actor: '曹操', note: '親征漢中' },
+      { fromCityId: 'chengdu', toCityId: 'dingjun', actor: '劉備', note: '據險待敵' },
+    ],
+    prevLink: '定軍山夏侯淵已隕，張郃退守。曹操親提大軍來爭漢中，劉備據險以待。',
+    briefing:
+      '漢水湍急，定軍山餘燼未冷。夏侯淵的旗已不在山頭，張郃殘部退至陽平。\n曹操巡營，見將士疲乏，口中只道：「雞肋。」楊修已去，帳中再無人敢問。\n劉備、黃忠、法正佈於對岸。曹操按劍：「漢中是益州咽喉。今日不取，他日必為大患。」\n鼓聲自山中傳來。這一仗，未必能贏天下，卻能決定他還能走多遠。',
+    epilogueWin:
+      '漢中前鋒被擊退，曹軍得以整隊。曹操立於漢水邊，終究明白：有些肉，啃著無味，棄之可惜。\n魏武半生征伐，至此可告一段落——天下未一，火種卻已傳到下一代。',
+    epilogueLose:
+      '趙雲在漢水之畔大開空營，曹軍自亂。漢中不復可爭。\n曹操回望棧道，只留下一句：雞肋。',
+    bridgeNext: '曹操傳完。亂世未盡，蜀吳兩傳仍在繼續。',
+    packs: ['standard', 'ex', 'wind', 'yijiang'],
+    playerGeneralId: 'caocao',
+    allies: [{ generalId: 'zhanghe', name: '張郃' }],
+    allyChoices: ['xuchu', 'zhangliao', 'xuhuang'],
+    enemies: [
+      { generalId: 'liubei', name: '劉備' },
+      { generalId: 'huangzhong', name: '黃忠' },
+      { generalId: 'fazheng', name: '法正' },
+      { generalId: 'zhaoyun', name: '趙雲' },
     ],
     victory: { type: 'eliminate_enemies' },
   },
