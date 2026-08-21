@@ -69,6 +69,14 @@ export interface PlayerState {
   judges: CardInstance[]
   alive: boolean
   shaUsedThisTurn: boolean
+  /** 本回合使用或打出過【殺】（克己） */
+  shaPlayedThisTurn?: boolean
+  /** 酒：本回合已使用過【酒】 */
+  jiuUsedThisTurn?: boolean
+  /** 酒：下一張【殺】傷害+1 */
+  jiuActive?: boolean
+  /** 破軍移出遊戲的牌，下回合開始時收回 */
+  pojunAside?: CardInstance[]
   /** 裸衣：本回合殺傷害+1且不能用錦囊 */
   luoyiActive?: boolean
   /** 制衡每回合限一次 */

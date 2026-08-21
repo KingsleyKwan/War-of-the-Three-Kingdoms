@@ -26,7 +26,7 @@ export const PACK_DEFS: PackDef[] = [
   {
     id: 'ex',
     name: '軍爭',
-    hint: '火攻、鐵索連環、火殺、雷殺、藤甲等',
+    hint: '火攻、鐵索連環、火殺、雷殺、酒、閃電、藤甲、朱雀羽扇等',
     hasCards: true,
     hasGenerals: false,
   },

@@ -40,7 +40,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['tuxi'],
     pack: 'standard',
-    skillText: '突襲：摸牌階段可少摸一張並獲得一名其他角色的一張手牌。',
+    skillText: '突襲：摸牌階段可放棄摸牌，改為獲得一至兩名其他角色各一張手牌。',
   },
   {
     id: 'xuchu',
@@ -50,7 +50,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['luoyi'],
     pack: 'standard',
-    skillText: '裸衣：棄兩張牌，本回合殺傷害+1且不能使用錦囊。',
+    skillText: '裸衣：棄兩張牌，本回合你使用的【殺】或【決鬥】傷害+1且不能使用錦囊。',
   },
   {
     id: 'guojia',
@@ -110,7 +110,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['guanxing', 'kongcheng'],
     pack: 'standard',
-    skillText: '觀星：準備階段觀看牌堆頂並調整。空城：手牌為0時不能成為殺的目標。',
+    skillText: '觀星：準備階段觀看牌堆頂並調整。空城：手牌為0時不能成為【殺】或【決鬥】的目標。',
   },
   {
     id: 'zhaoyun',
@@ -170,7 +170,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['keji'],
     pack: 'standard',
-    skillText: '克己：若未出殺，跳過棄牌階段。',
+    skillText: '克己：若本回合未使用或打出【殺】，跳過棄牌階段。',
   },
   {
     id: 'huanggai',
@@ -230,7 +230,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['jijiu', 'qingnang'],
     pack: 'standard',
-    skillText: '急救：紅牌可當桃。青囊：棄一張牌令一名角色回1體力。',
+    skillText: '急救：你的回合外，紅牌可當桃。青囊：棄一張牌令一名角色回1體力。',
   },
   {
     id: 'lvbu',
@@ -240,7 +240,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['wushuang'],
     pack: 'standard',
-    skillText: '無雙：你使用的殺需兩張閃才能抵消。',
+    skillText: '無雙：你使用的【殺】需兩張【閃】才能抵消；與你【決鬥】的角色每次需打出兩張【殺】。',
   },
   {
     id: 'diaochan',

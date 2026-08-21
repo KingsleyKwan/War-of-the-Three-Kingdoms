@@ -568,9 +568,55 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
     // Prefer attack conversions
     if (ids.includes('sha')) return 'sha'
     if (ids.includes('guohe')) return 'guohe'
+    if (ids.includes('huogong')) return 'huogong'
+    if (ids.includes('juedou')) return 'juedou'
     if (ids.includes('lebu')) return 'lebu'
+    if (ids.includes('tiesuo')) return 'tiesuo'
+    if (ids.includes('bingliang')) return 'bingliang'
     return ids[0] ?? null
   }
+  if (key === 'shensu') {
+    const hostiles = state.players.some(
+      (p) => p.alive && p.id !== playerId && scoreAttackTarget(state, playerId, p.id) > 0,
+    )
+    return hostiles && ids.includes('shensu_skip') ? 'shensu_skip' : 'shensu_normal'
+  }
+  if (key === 'jushou') return ids.includes('yes') ? 'yes' : 'no'
+  if (key === 'yinghun_target') {
+    return ids.find((id) => !believedHostile(state, playerId, Number(id))) ?? ids[0] ?? null
+  }
+  if (key === 'fangzhu_target') {
+    return ids.find((id) => believedHostile(state, playerId, Number(id))) ?? ids[0] ?? null
+  }
+  if (key === 'tuxi' || key === 'zaiqi') return ids.includes('yes') ? 'yes' : ids[0] ?? null
+  if (key === 'tuxi_target' || key === 'tuxi_second') {
+    if (ids.includes('done')) {
+      const hostiles = ids.filter((id) => id !== 'done' && believedHostile(state, playerId, Number(id)))
+      return hostiles[0] ?? 'done'
+    }
+    return ids.find((id) => believedHostile(state, playerId, Number(id))) ?? ids[0] ?? null
+  }
+  if (key === 'yinghun_mode') return 'drawx'
+  if (key === 'xiansi_prep') {
+    const hostiles = ids.filter((id) => id !== 'skip' && believedHostile(state, playerId, Number(id)))
+    return hostiles[0] ?? 'skip'
+  }
+  if (key === 'huogong_show') return ids[0] ?? null
+  if (key === 'huogong_discard') return ids.find((id) => id !== 'skip') ?? 'skip'
+  if (key === 'luanwu_act') {
+    const sha = ids.find((id) => id.startsWith('sha:'))
+    if (sha) {
+      const tid = Number(sha.slice(4))
+      if (scoreAttackTarget(state, playerId, tid) > 0) return sha
+    }
+    return ids.includes('lose') ? 'lose' : ids[0] ?? null
+  }
+  if (key === 'shensu_sha') {
+    const hostiles = ids.filter((id) => id !== 'skip' && scoreAttackTarget(state, playerId, Number(id)) > 0)
+    return hostiles[0] ?? 'skip'
+  }
+  if (key === 'beige') return 'yes'
+  if (key === 'beige_card') return ids[0] ?? 'skip'
   if (key === 'qiangxi_cost') {
     const weapon = ids.find((id) => id.startsWith('equip:') || id.startsWith('hand:'))
     if (weapon) return weapon

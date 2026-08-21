@@ -5,10 +5,19 @@
  * Usage: npx --yes tsx scripts/skill-match-review.ts
  */
 import { stepAiSimple } from '../src/ai/simple'
+import { CARD_DEFS } from '../src/data/cards'
 import { GENERALS, getGeneral } from '../src/data/generals'
-import { createMatch, debugDealDamage, getLegalTargets, resolveChoice } from '../src/engine/game'
+import {
+  createMatch,
+  debugDealDamage,
+  getLegalTargets,
+  getPlayKindOptions,
+  playableCards,
+  resolveChoice,
+  selectCard,
+} from '../src/engine/game'
 import { SKILL_CATALOG } from '../src/engine/skillCatalog'
-import type { GameSnapshot, MatchConfig } from '../src/engine/types'
+import type { CardInstance, GameSnapshot, MatchConfig } from '../src/engine/types'
 
 const mem = new Map<string, string>()
 ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -244,6 +253,70 @@ function scenarioQianxun(): Issue[] {
   return issues
 }
 
+function plantKind(state: GameSnapshot, playerId: number, kind: string): CardInstance | null {
+  const def = CARD_DEFS.find((c) => c.kind === kind)
+  if (!def) return null
+  const card: CardInstance = { uid: `plant-${kind}-${playerId}-${state.players[playerId].hand.length}`, defId: def.id }
+  state.players[playerId].hand.push(card)
+  return card
+}
+
+function scenarioKongcheng(): Issue[] {
+  const issues: Issue[] = []
+  const state = createMatch(duelConfig('zhugeliang', 'zhangfei'))
+  state.players[0].hand = []
+  if (getLegalTargets(state, 1, 'juedou').includes(0)) {
+    issues.push({ level: 'fail', msg: 'kongcheng: empty-hand 諸葛亮 must not be a 決鬥 target' })
+  }
+  if (getLegalTargets(state, 1, 'sha').includes(0)) {
+    issues.push({ level: 'fail', msg: 'kongcheng: empty-hand 諸葛亮 must not be a 殺 target' })
+  }
+  return issues
+}
+
+function scenarioJijiuNotInPlay(): Issue[] {
+  const issues: Issue[] = []
+  const state = createMatch(duelConfig('huatuo', 'zhangfei'))
+  const redShan = CARD_DEFS.find(
+    (c) => c.kind === 'shan' && (c.suit === 'heart' || c.suit === 'diamond'),
+  )
+  if (!redShan) {
+    issues.push({ level: 'fail', msg: 'jijiu scenario: no red 閃 def' })
+    return issues
+  }
+  const card: CardInstance = { uid: 'jijiu-red-shan', defId: redShan.id }
+  state.players[0].hand.push(card)
+  const opts = getPlayKindOptions(state.players[0], card)
+  if (opts.includes('tao')) {
+    issues.push({ level: 'fail', msg: 'jijiu: 急救 must not convert red cards to 桃 in own play phase' })
+  }
+  return issues
+}
+
+function scenarioJiuOnce(): Issue[] {
+  const issues: Issue[] = []
+  const state = createMatch(duelConfig('zhangfei', 'caocao'))
+  const p = state.players[0]
+  const a = plantKind(state, 0, 'jiu')
+  const b = plantKind(state, 0, 'jiu')
+  if (!a || !b) {
+    issues.push({ level: 'fail', msg: 'jiu scenario: missing 酒 card def' })
+    return issues
+  }
+  if (state.prompt.kind !== 'choose_card' || state.prompt.actorId !== 0) {
+    issues.push({ level: 'fail', msg: `jiu scenario: expected play prompt, got ${state.prompt.kind}` })
+    return issues
+  }
+  selectCard(state, 0, a.uid)
+  if (!p.jiuActive || !p.jiuUsedThisTurn) {
+    issues.push({ level: 'fail', msg: 'jiu scenario: first 酒 did not activate' })
+  }
+  if (playableCards(state, 0).some((c) => c.uid === b.uid)) {
+    issues.push({ level: 'fail', msg: 'jiu scenario: second 酒 should not be playable this turn' })
+  }
+  return issues
+}
+
 function printCatalogSummary(): void {
   const ok = SKILL_CATALOG.filter((s) => s.status === 'ok').length
   const partial = SKILL_CATALOG.filter((s) => s.status === 'partial').length
@@ -264,6 +337,9 @@ function main(): void {
     ...scenarioYiji(),
     ...scenarioJianxiong(),
     ...scenarioQianxun(),
+    ...scenarioKongcheng(),
+    ...scenarioJijiuNotInPlay(),
+    ...scenarioJiuOnce(),
   ]
   for (const i of scenarioIssues) {
     console.log(`${i.level.toUpperCase()}: ${i.msg}`)

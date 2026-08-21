@@ -60,6 +60,9 @@ const SPECS: Spec[] = [
   ]),
   ...spread('taoyuan', '桃園結義', 'trick', 'standard', [['heart', 1]]),
   ...spread('wugu', '五穀豐登', 'trick', 'standard', [['heart', 3]]),
+  ...spread('lebu', '樂不思蜀', 'trick', 'standard', [
+    ['spade', 6], ['club', 6], ['heart', 6],
+  ]),
   // —— 裝備 ——
   eq('zhuge', '諸葛連弩', 'weapon', 'standard', 'diamond', 1, 1),
   eq('cixiong', '雌雄雙股劍', 'weapon', 'standard', 'spade', 2, 2),
@@ -97,11 +100,15 @@ const SPECS: Spec[] = [
   ...spread('bingliang', '兵糧寸斷', 'trick', 'ex', [
     ['spade', 10], ['club', 4],
   ]),
-  ...spread('lebu', '樂不思蜀', 'trick', 'ex', [
-    ['spade', 6], ['club', 6], ['heart', 6],
+  ...spread('jiu', '酒', 'basic', 'ex', [
+    ['spade', 3], ['spade', 9], ['club', 3], ['club', 9], ['diamond', 9],
+  ]),
+  ...spread('shandian', '閃電', 'trick', 'ex', [
+    ['spade', 1], ['heart', 1],
   ]),
   eq('hanbing', '寒冰劍', 'weapon', 'ex', 'spade', 2, 2),
   eq('guding', '古錠刀', 'weapon', 'ex', 'spade', 1, 2),
+  eq('zhuque', '朱雀羽扇', 'weapon', 'ex', 'diamond', 1, 4),
   eq('tengjia', '藤甲', 'armor', 'ex', 'spade', 2),
   eq('tengjia', '藤甲', 'armor', 'ex', 'club', 2),
   eq('baiyin', '白銀獅子', 'armor', 'ex', 'club', 1),

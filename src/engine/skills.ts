@@ -31,7 +31,7 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
     }
   }
   if (skills.includes('luoyi') && !p.luoyiActive && p.hand.length >= 2) {
-    actions.push({ id: 'luoyi', label: '裸衣', hint: '棄兩張牌：本回合殺傷害+1，不能用錦囊' })
+    actions.push({ id: 'luoyi', label: '裸衣', hint: '棄兩張牌：本回合殺／決鬥傷害+1，不能用錦囊' })
   }
   if (skills.includes('qiangxi') && !p.qiangxiUsed) {
     const range = attackRangeOf(p)
@@ -104,7 +104,7 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
     actions.push({ id: 'dimeng', label: '締盟', hint: '棄手牌並交換兩名角色手牌' })
   }
   if (skills.includes('luanwu') && !p.luanwuUsed) {
-    actions.push({ id: 'luanwu', label: '亂武', hint: '其他角色依次失去1點體力' })
+    actions.push({ id: 'luanwu', label: '亂武', hint: '其他角色對距離最近者出殺，否則失去1體力' })
   }
   if (skills.includes('qiaobian') && !p.qiaobianUsed && p.hand.length > 0) {
     actions.push({ id: 'qiaobian', label: '巧變', hint: '棄一張牌並摸一張牌' })

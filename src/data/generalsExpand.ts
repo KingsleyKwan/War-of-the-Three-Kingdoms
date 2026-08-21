@@ -14,7 +14,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['shensu'],
     pack: 'wind',
-    skillText: '神速：摸牌階段前可跳過摸牌，令本回合【殺】無距離限制。',
+    skillText: '神速：可跳過判定與摸牌階段，視為對一名角色使用【殺】（無距離限制）。',
   },
   {
     id: 'caoren',
@@ -24,7 +24,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['jushou'],
     pack: 'wind',
-    skillText: '據守：出牌階段結束時可摸四張牌，然後跳過下回合出牌階段。',
+    skillText: '據守：出牌階段結束時可摸三張牌，然後跳過下回合出牌階段。',
   },
   {
     id: 'huangzhong',
@@ -34,7 +34,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['liegong'],
     pack: 'wind',
-    skillText: '烈弓：你使用【殺】指定目標時，若其手牌數≥你的手牌數，其不能出【閃】。',
+    skillText: '烈弓：你使用【殺】指定目標時，若其手牌數≥你的手牌數，或其體力≤你的攻擊範圍，其不能出【閃】。',
   },
   {
     id: 'weiyan',
@@ -74,7 +74,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['guhuo'],
     pack: 'wind',
-    skillText: '蠱惑：每回合限一次，將一張手牌當【殺】、【閃】、【桃】或【無中生有】。',
+    skillText: '蠱惑：每回合限一次，將一張手牌當【殺】、【閃】、【桃】或【無中生有】（【閃】僅能在需要響應時使用）。',
   },
   // —— 火 ——
   {
@@ -217,7 +217,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['weimu', 'wansha', 'luanwu'],
     pack: 'forest',
-    skillText: '帷幕：不能成為黑色指定目標錦囊的目標。完殺：你的回合僅你可救援瀕死角色。亂武：限定一次，其他角色失去1體力。',
+    skillText: '帷幕：不能成為黑色錦囊的目標（含南蠻入侵）。完殺：你的回合僅你可救援瀕死角色。亂武：限定一次，其他角色需對距離最近角色使用【殺】，否則失去1體力。',
   },
   // —— 山 ——
   {
@@ -228,7 +228,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['qiaobian'],
     pack: 'mountain',
-    skillText: '巧變：每回合限一次，棄一張牌並摸一張牌。',
+    skillText: '巧變：棄一張牌並摸一張牌（出牌階段限一次）。',
   },
   {
     id: 'dengai',
@@ -319,7 +319,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['pojun'],
     pack: 'yijiang',
-    skillText: '破軍：你的【殺】造成傷害後，目標摸等同其當前體力值的牌（至多五張）並跳過下個出牌階段。',
+    skillText: '破軍：你的【殺】造成傷害後，將目標區域內至多X張牌移出遊戲（X為其體力，至多五張），其下回合開始時收回。',
   },
   {
     id: 'wuguotai',
