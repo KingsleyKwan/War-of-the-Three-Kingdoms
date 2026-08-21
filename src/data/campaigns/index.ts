@@ -1,3 +1,4 @@
+import { LIEZHUAN_CAMPAIGNS } from '../liezhuan'
 import {
   buildFreeMatch,
   buildStageEpilogue,
@@ -41,12 +42,16 @@ export const CAMPAIGNS: CampaignDef[] = [
   },
 ]
 
+export function allStoryCampaigns(): CampaignDef[] {
+  return [...CAMPAIGNS, ...LIEZHUAN_CAMPAIGNS]
+}
+
 export function getCampaign(id: string): CampaignDef | undefined {
-  return CAMPAIGNS.find((c) => c.id === id)
+  return allStoryCampaigns().find((c) => c.id === id)
 }
 
 export function findStage(stageId: string): { campaign: CampaignDef; stage: CampaignStage } | null {
-  for (const campaign of CAMPAIGNS) {
+  for (const campaign of allStoryCampaigns()) {
     const stage = campaign.stages.find((s) => s.id === stageId)
     if (stage) return { campaign, stage }
   }
@@ -80,4 +85,8 @@ export function unlockNextStage(campaignId: string, clearedIndex: number): void 
   if (clearedIndex >= cur) {
     localStorage.setItem(progressKey(campaignId), String(clearedIndex + 1))
   }
+}
+
+export function isCampaignComplete(campaignId: string, stageCount: number): boolean {
+  return loadCampaignProgress(campaignId) > stageCount
 }

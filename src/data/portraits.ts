@@ -1,4 +1,6 @@
-import type { Kingdom } from '../engine/types'
+import type { GeneralDef, Kingdom } from '../engine/types'
+import { chibiDataUri } from './chibi'
+import { getEquippedSkin } from '../persist/progress'
 
 const KINGDOM_COLOR: Record<Kingdom, string> = {
   wei: '#3a5a9a',
@@ -8,7 +10,7 @@ const KINGDOM_COLOR: Record<Kingdom, string> = {
   god: '#5a3a7a',
 }
 
-/** Stylized portrait avatar (SVG data URI) per general */
+/** Stylized portrait avatar (SVG data URI) per general — default, no skin. */
 export function portraitDataUri(
   name: string,
   kingdom: Kingdom,
@@ -31,4 +33,10 @@ export function portraitDataUri(
   <text x="48" y="58" text-anchor="middle" font-size="28" font-family="serif" fill="#f6ecd4" font-weight="700">${label}</text>
 </svg>`
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+}
+
+/** Equipped Q-skin if unlocked, otherwise default (no skin). */
+export function generalAvatarUri(g: GeneralDef, forceChibi = false): string {
+  if (forceChibi || getEquippedSkin(g.id) === 'chibi') return chibiDataUri(g)
+  return portraitDataUri(g.name, g.kingdom, g.gender)
 }

@@ -14,11 +14,13 @@ import {
   type CampaignStage,
 } from '../data/campaigns'
 import { renderCampaignMap } from '../data/campaigns/map'
-import { getGeneral } from '../data/generals'
+import { getGeneral, listGeneralsForPick } from '../data/generals'
 import { CARD_HELP, rankLabel, suitName, suitSymbol } from '../data/help'
+import { getLiezhuanByGeneral, isLiezhuanId } from '../data/liezhuan'
 import { formatPackList, PACK_DEFS } from '../data/packs'
 import { colorizeSeatNamesInText, seatColor, seatRefHtml } from '../data/seatColors'
-import { portraitDataUri } from '../data/portraits'
+import { generalAvatarUri } from '../data/portraits'
+import { chibiDataUri } from '../data/chibi'
 import {
   activateSkill,
   cancelTarget,
@@ -35,14 +37,41 @@ import { listSkillActions } from '../engine/skills'
 import { canReach, getDistance } from '../engine/helpers'
 import type { GameSnapshot, GameMode, PlayerState, PlayFx } from '../engine/types'
 import { loadSettings, saveSettings, type AppSettings } from '../persist/settings'
+import {
+  CHIBI_SKIN,
+  getEquippedSkin,
+  hasSkin,
+  recordMatchResult,
+  recordStageCleared,
+  setEquippedSkin,
+  unlockSkin,
+  type UnlockBanner,
+} from '../persist/progress'
+import {
+  achievementProgress,
+  evaluateAchievements,
+  isAchievementUnlocked,
+  listAchievementDefs,
+} from '../persist/achievements'
 import { APP_VERSION } from '../version'
 
-type Screen = 'start' | 'setup' | 'settings' | 'story' | 'stage' | 'table' | 'epilogue' | 'result'
+type Screen =
+  | 'start'
+  | 'setup'
+  | 'settings'
+  | 'story'
+  | 'liezhuan'
+  | 'achievements'
+  | 'stage'
+  | 'table'
+  | 'epilogue'
+  | 'result'
 
 interface AppState {
   screen: Screen
   setupMode: GameMode
   campaignId: string | null
+  storyKind: 'campaign' | 'liezhuan'
   stage: CampaignStage | null
   allyChoice: string | null
   game: GameSnapshot | null
@@ -56,12 +85,15 @@ interface AppState {
   matchEndPending: boolean
   /** User paused the match (AI and play held) */
   matchPaused: boolean
+  unlockBanners: UnlockBanner[]
+  liezhuanFilter: 'all' | 'wei' | 'shu' | 'wu' | 'qun'
 }
 
 const app: AppState = {
   screen: 'start',
   setupMode: 'duel',
   campaignId: null,
+  storyKind: 'campaign',
   stage: null,
   allyChoice: null,
   game: null,
@@ -72,6 +104,8 @@ const app: AppState = {
   fxSettledSeq: null,
   matchEndPending: false,
   matchPaused: false,
+  unlockBanners: [],
+  liezhuanFilter: 'all',
 }
 
 const root = () => document.querySelector<HTMLDivElement>('#app')!
@@ -98,6 +132,14 @@ function render(): void {
     case 'story':
       el.innerHTML = renderStoryList()
       bindStoryList()
+      break
+    case 'liezhuan':
+      el.innerHTML = renderLiezhuanList()
+      bindLiezhuanList()
+      break
+    case 'achievements':
+      el.innerHTML = renderAchievements()
+      bindAchievements()
       break
     case 'stage':
       el.innerHTML = renderStageBrief()
@@ -153,10 +195,12 @@ function renderStart(): string {
     <div class="start-content">
       <p class="brand">sley</p>
       <h1 class="title">單機三國殺</h1>
-      <p class="tagline">E殺風格・自由對戰與三國傳記</p>
+      <p class="tagline">E殺風格・自由對戰、三國傳記與武將列傳</p>
       <div class="cta-row">
         <button type="button" class="btn primary" data-go="setup">自由對戰</button>
         <button type="button" class="btn" data-go="story">劇情模式</button>
+        <button type="button" class="btn" data-go="liezhuan">武將列傳</button>
+        <button type="button" class="btn" data-go="achievements">成就</button>
         <button type="button" class="btn ghost" data-go="settings">設定</button>
       </div>
       <p class="version" id="app-version">v${APP_VERSION}</p>
@@ -167,9 +211,164 @@ function renderStart(): string {
 function bindStart(): void {
   root().querySelectorAll('[data-go]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      app.screen = (btn as HTMLElement).dataset.go as Screen
+      const go = (btn as HTMLElement).dataset.go as Screen
+      if (go === 'story') {
+        app.storyKind = 'campaign'
+        app.campaignId = null
+      }
+      if (go === 'liezhuan') {
+        app.storyKind = 'liezhuan'
+        app.campaignId = null
+      }
+      app.screen = go
       render()
     })
+  })
+}
+
+function kingdomLabel(k: string): string {
+  return ({ wei: '魏', shu: '蜀', wu: '吳', qun: '群', god: '神' } as Record<string, string>)[k] ?? k
+}
+
+function renderLiezhuanList(): string {
+  const gens = listGeneralsForPick().filter((g) =>
+    app.liezhuanFilter === 'all' ? true : g.kingdom === app.liezhuanFilter,
+  )
+  const filters: Array<'all' | 'wei' | 'shu' | 'wu' | 'qun'> = ['all', 'wei', 'shu', 'wu', 'qun']
+  const done = listGeneralsForPick().filter((g) => hasSkin(g.id)).length
+  const total = listGeneralsForPick().length
+  return `
+  <div class="screen panel-screen liezhuan-screen">
+    <header class="topbar">
+      <button type="button" class="btn ghost" data-back>返回</button>
+      <h2>武將列傳</h2>
+    </header>
+    <p class="story-intro">每位武將皆有個人列傳（一至數關）。通關後解鎖該武將的 Q 版造型；預設無造型。</p>
+    <p class="lz-progress">已解鎖造型 ${done}/${total}</p>
+    <div class="lz-filters">
+      ${filters
+        .map((f) => {
+          const label = f === 'all' ? '全部' : kingdomLabel(f)
+          return `<button type="button" class="btn ${app.liezhuanFilter === f ? 'primary' : 'ghost'}" data-filter="${f}">${label}</button>`
+        })
+        .join('')}
+    </div>
+    <ul class="lz-grid">
+      ${gens
+        .map((g) => {
+          const lz = getLiezhuanByGeneral(g.id)
+          if (!lz) return ''
+          const progress = loadCampaignProgress(lz.id)
+          const cleared = Math.min(progress - 1, lz.stages.length)
+          const complete = hasSkin(g.id)
+          const equipped = getEquippedSkin(g.id) === 'chibi'
+          const avatar = complete ? chibiDataUri(g) : portraitDataUriFallback(g)
+          return `<li class="lz-card ${complete ? 'done' : ''}">
+            <button type="button" class="lz-open" data-lz="${g.id}">
+              <img class="lz-avatar ${complete ? 'chibi-on' : ''}" src="${avatar}" alt="" />
+              <span class="lz-name">${escapeHtml(g.name)}</span>
+              <span class="lz-meta">${kingdomLabel(g.kingdom)}・${lz.stages.length} 關・${cleared}/${lz.stages.length}</span>
+              <span class="lz-badge">${complete ? (equipped ? 'Q 版已裝備' : '已解鎖') : '尚無造型'}</span>
+            </button>
+            ${
+              complete
+                ? `<button type="button" class="btn ghost lz-toggle" data-skin="${g.id}">${equipped ? '卸下造型' : '裝備 Q 版'}</button>`
+                : ''
+            }
+          </li>`
+        })
+        .join('')}
+    </ul>
+  </div>`
+}
+
+function portraitDataUriFallback(g: ReturnType<typeof getGeneral>): string {
+  return generalAvatarUri(g)
+}
+
+function bindLiezhuanList(): void {
+  root().querySelector('[data-back]')?.addEventListener('click', () => {
+    app.screen = 'start'
+    render()
+  })
+  root().querySelectorAll('[data-filter]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      app.liezhuanFilter = (btn as HTMLElement).dataset.filter as AppState['liezhuanFilter']
+      render()
+    })
+  })
+  root().querySelectorAll('[data-lz]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = (btn as HTMLElement).dataset.lz!
+      const lz = getLiezhuanByGeneral(id)
+      if (!lz) return
+      app.storyKind = 'liezhuan'
+      app.campaignId = lz.id
+      app.screen = 'story'
+      render()
+    })
+  })
+  root().querySelectorAll('[data-skin]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const id = (btn as HTMLElement).dataset.skin!
+      const on = getEquippedSkin(id) === 'chibi'
+      setEquippedSkin(id, on ? null : CHIBI_SKIN)
+      render()
+    })
+  })
+}
+
+function renderAchievements(): string {
+  const defs = listAchievementDefs()
+  const { unlocked, total } = achievementProgress()
+  const groups: Array<{ kind: string; title: string }> = [
+    { kind: 'feat', title: '功業' },
+    { kind: 'campaign', title: '劇情傳記' },
+    { kind: 'set', title: '勢力集齊' },
+    { kind: 'liezhuan', title: '武將列傳' },
+  ]
+  return `
+  <div class="screen panel-screen ach-screen">
+    <header class="topbar">
+      <button type="button" class="btn ghost" data-back>返回</button>
+      <h2>成就</h2>
+    </header>
+    <p class="story-intro">完成列傳可解鎖 Q 版造型。成就進度 ${unlocked}/${total}。</p>
+    ${groups
+      .map((gr) => {
+        const items = defs.filter((d) => d.kind === gr.kind)
+        return `<section class="ach-group">
+          <h3>${gr.title}</h3>
+          <ul class="ach-list">
+            ${items
+              .map((d) => {
+                const on = isAchievementUnlocked(d.id)
+                const g = d.generalId ? getGeneral(d.generalId) : null
+                const img = g
+                  ? `<img src="${on ? chibiDataUri(g) : generalAvatarUri(g)}" alt="" />`
+                  : ''
+                return `<li class="ach-item ${on ? 'on' : ''}">
+                  ${img}
+                  <div>
+                    <strong>${escapeHtml(d.title)}</strong>
+                    <span>${escapeHtml(d.hint)}</span>
+                  </div>
+                  <em>${on ? '已達成' : '未達成'}</em>
+                </li>`
+              })
+              .join('')}
+          </ul>
+        </section>`
+      })
+      .join('')}
+  </div>`
+}
+
+function bindAchievements(): void {
+  root().querySelector('[data-back]')?.addEventListener('click', () => {
+    app.screen = 'start'
+    render()
   })
 }
 
@@ -354,7 +553,9 @@ function renderStoryList(): string {
   return `
   <div class="screen panel-screen">
     <header class="topbar">
-      <button type="button" class="btn ghost" data-back-campaigns>傳記列表</button>
+      <button type="button" class="btn ghost" data-back-campaigns>${
+        app.storyKind === 'liezhuan' ? '列傳列表' : '傳記列表'
+      }</button>
       <h2>劇情・${escapeHtml(campaign.title)}</h2>
     </header>
     <p class="story-intro">${escapeHtml(campaign.blurb)}</p>
@@ -382,6 +583,12 @@ function bindStoryList(): void {
     render()
   })
   root().querySelector('[data-back-campaigns]')?.addEventListener('click', () => {
+    if (app.storyKind === 'liezhuan') {
+      app.campaignId = null
+      app.screen = 'liezhuan'
+      render()
+      return
+    }
     app.campaignId = null
     render()
   })
@@ -643,7 +850,7 @@ function renderTable(): string {
           const c = seatColor(p.id)
           const portrait =
             app.settings.showPortraits && gen
-              ? `<img class="portrait" src="${portraitDataUri(gen.name, gen.kingdom, gen.gender)}" alt="" width="48" height="48" />`
+              ? `<img class="portrait ${getEquippedSkin(gen.id) === 'chibi' ? 'chibi-on' : ''}" src="${generalAvatarUri(gen)}" alt="" width="48" height="48" />`
               : app.settings.showPortraits
                 ? `<div class="portrait portrait-empty" aria-hidden="true">？</div>`
                 : ''
@@ -804,7 +1011,7 @@ function renderGeneralPickPanel(g: GameSnapshot): string {
         .map((id) => {
           const gen = getGeneral(id)
           const portrait = app.settings.showPortraits
-            ? `<img class="pick-portrait" src="${portraitDataUri(gen.name, gen.kingdom, gen.gender)}" alt="" />`
+            ? `<img class="pick-portrait ${getEquippedSkin(gen.id) === 'chibi' ? 'chibi-on' : ''}" src="${generalAvatarUri(gen)}" alt="" />`
             : ''
           return `<div class="pick-card">
             ${portrait}
@@ -1280,9 +1487,34 @@ function maybeFinish(): void {
     return
   }
   if (!app.matchEndPending) {
-    if (g.config.campaignStageId && g.winnerIds.includes(0)) {
+    const won = g.winnerIds.includes(0)
+    recordMatchResult({
+      won,
+      identity: g.config.mode === 'identity5' || g.config.mode === 'identity8',
+    })
+    if (g.config.campaignStageId && won) {
       const found = findStage(g.config.campaignStageId)
-      if (found) unlockNextStage(found.campaign.id, found.stage.index)
+      if (found) {
+        unlockNextStage(found.campaign.id, found.stage.index)
+        recordStageCleared()
+        const banners: UnlockBanner[] = []
+        if (isLiezhuanId(found.campaign.id) && found.stage.index >= found.campaign.stages.length) {
+          const generalId = found.campaign.id.slice(3)
+          const gen = getGeneral(generalId)
+          if (unlockSkin(generalId, CHIBI_SKIN)) {
+            banners.push({
+              kind: 'skin',
+              title: `解鎖 Q 版造型`,
+              detail: `${gen.name}・簡單 Q 版角色樣`,
+              generalId,
+            })
+          }
+        }
+        banners.push(...evaluateAchievements())
+        app.unlockBanners = banners
+      }
+    } else if (won) {
+      app.unlockBanners = evaluateAchievements()
     }
     app.matchEndPending = true
   }
@@ -1337,14 +1569,27 @@ function bindEpilogue(): void {
 function renderResult(): string {
   const g = app.game!
   const humanWin = g.winnerIds?.includes(0)
+  const banners = app.unlockBanners
+  const bannerHtml = banners.length
+    ? `<ul class="unlock-list">${banners
+        .map((b) => {
+          const img =
+            b.kind === 'skin' && b.generalId
+              ? `<img class="unlock-chibi" src="${chibiDataUri(getGeneral(b.generalId))}" alt="" />`
+              : ''
+          return `<li class="unlock-item ${b.kind}">${img}<div><strong>${escapeHtml(b.title)}</strong><span>${escapeHtml(b.detail)}</span></div></li>`
+        })
+        .join('')}</ul>`
+    : ''
   return `
   <div class="screen panel-screen result-screen">
     <h2>${humanWin ? '勝利' : '敗北'}</h2>
     <p>${escapeHtml(g.resultMessage ?? '')}</p>
+    ${bannerHtml}
     <div class="cta-row">
       <button type="button" class="btn primary" id="again">再來一局</button>
       <button type="button" class="btn" id="home">回首頁</button>
-      ${app.stage ? `<button type="button" class="btn" id="story">關卡列表</button>` : ''}
+      ${app.stage ? `<button type="button" class="btn" id="story">${app.storyKind === 'liezhuan' ? '列傳關卡' : '關卡列表'}</button>` : ''}
     </div>
   </div>`
 }
@@ -1353,15 +1598,18 @@ function bindResult(): void {
   root().querySelector('#home')?.addEventListener('click', () => {
     app.game = null
     app.stage = null
+    app.unlockBanners = []
     app.screen = 'start'
     render()
   })
   root().querySelector('#story')?.addEventListener('click', () => {
     app.game = null
+    app.unlockBanners = []
     app.screen = 'story'
     render()
   })
   root().querySelector('#again')?.addEventListener('click', () => {
+    app.unlockBanners = []
     if (app.stage) {
       app.screen = 'stage'
       render()
