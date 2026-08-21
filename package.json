@@ -1,14 +1,14 @@
 {
   "name": "war-of-the-three-kingdoms",
   "private": true,
-  "version": "0.14.0",
+  "version": "0.14.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "smoke": "bash scripts/smoke-pages-game.sh",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --test 'tests/*.test.ts'",
     "test:skills": "tsx scripts/skill-match-review.ts"
   },
   "devDependencies": {
