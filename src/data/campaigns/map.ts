@@ -1,4 +1,4 @@
-/** Simplified late-Han map coordinates (percent of viewBox). */
+/** Simplified late-Han map coordinates (percent of full theater). */
 
 export interface CampaignCity {
   id: string
@@ -72,6 +72,64 @@ export function getCity(id: string): CampaignCity {
   return c
 }
 
+/** Zoom viewBox to visible cities so local battles are not a tiny cluster in the center. */
+function fitViewBox(cities: CampaignCity[]): {
+  viewBox: string
+  unit: number
+  x0: number
+  y0: number
+  side: number
+} {
+  if (cities.length === 0) {
+    return { viewBox: '0 0 100 100', unit: 1, x0: 0, y0: 0, side: 100 }
+  }
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
+  for (const c of cities) {
+    minX = Math.min(minX, c.x)
+    maxX = Math.max(maxX, c.x)
+    minY = Math.min(minY, c.y)
+    maxY = Math.max(maxY, c.y)
+  }
+  const spanX = Math.max(maxX - minX, 8)
+  const spanY = Math.max(maxY - minY, 8)
+  const pad = Math.max(10, Math.min(18, 28 - Math.min(spanX, spanY)))
+  const side = Math.max(spanX + pad * 2, spanY + pad * 2, 32)
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
+  const x0 = cx - side / 2
+  const y0 = cy - side / 2
+  const unit = side / 100
+  return {
+    viewBox: `${x0.toFixed(2)} ${y0.toFixed(2)} ${side.toFixed(2)} ${side.toFixed(2)}`,
+    unit,
+    x0,
+    y0,
+    side,
+  }
+}
+
+/** Alternate name/faction label offsets so nearby cities do not stack on one another. */
+function labelOffsets(
+  c: CampaignCity,
+  cities: CampaignCity[],
+  unit: number,
+): { nameDy: number; factionDy: number; nameDx: number; factionDx: number } {
+  const gap = 5.2 * unit
+  const aboveClear = !cities.some(
+    (o) => o.id !== c.id && Math.abs(o.x - c.x) < 6 && o.y < c.y && c.y - o.y < 8,
+  )
+  const rightHeavy = cities.filter((o) => o.id !== c.id && o.x > c.x && Math.abs(o.y - c.y) < 6).length
+  const leftHeavy = cities.filter((o) => o.id !== c.id && o.x < c.x && Math.abs(o.y - c.y) < 6).length
+  const dx = leftHeavy > rightHeavy ? 2.2 * unit : rightHeavy > leftHeavy ? -2.2 * unit : 0
+  if (aboveClear) {
+    return { nameDy: -gap, factionDy: gap * 1.05, nameDx: dx, factionDx: dx }
+  }
+  return { nameDy: gap * 1.35, factionDy: gap * 2.2, nameDx: dx, factionDx: dx }
+}
+
 export interface CampaignMapOpts {
   title: string
   era: string
@@ -79,7 +137,6 @@ export interface CampaignMapOpts {
   cityFactions: Record<string, string>
   movements: MapMovement[]
   visibleCityIds?: string[]
-  /** Extra HTML for the intel column (forces, packs, etc.) */
   intelExtraHtml?: string
 }
 
@@ -96,16 +153,26 @@ export function renderCampaignMap(opts: CampaignMapOpts): string {
     .map((id) => CAMPAIGN_CITIES[id])
     .filter(Boolean) as CampaignCity[]
 
+  const fit = fitViewBox(cities)
+  const u = fit.unit
+  const nameFs = Math.max(2.8, 3.4 * u)
+  const factionFs = Math.max(2.2, 2.6 * u)
+  const moveFs = Math.max(2.2, 2.5 * u)
+  const rNormal = Math.max(1.6, 2.4 * u)
+  const rBattle = Math.max(2.4, 3.4 * u)
+
   const markers = cities
     .map((c) => {
       const faction = opts.cityFactions[c.id] ?? '未定'
       const color = FACTION_COLORS[faction] ?? FACTION_COLORS['未定']
       const isBattle = c.id === opts.battlefieldCityId
+      const off = labelOffsets(c, cities, u)
+      const r = isBattle ? rBattle : rNormal
       return `
       <g class="map-city ${isBattle ? 'battle' : ''}" data-city="${c.id}">
-        <circle cx="${c.x}" cy="${c.y}" r="${isBattle ? 3.2 : 2.2}" fill="${color}" stroke="${isBattle ? '#f3e6c8' : 'rgba(243,230,200,0.45)'}" stroke-width="${isBattle ? 0.7 : 0.35}" />
-        <text x="${c.x}" y="${c.y - 4.2}" text-anchor="middle" class="map-city-name">${c.name}</text>
-        <text x="${c.x}" y="${c.y + 5.8}" text-anchor="middle" class="map-city-faction">${faction}</text>
+        <circle cx="${c.x}" cy="${c.y}" r="${r.toFixed(2)}" fill="${color}" stroke="${isBattle ? '#f3e6c8' : 'rgba(243,230,200,0.45)'}" stroke-width="${(isBattle ? 0.75 : 0.4) * u}" />
+        <text x="${(c.x + off.nameDx).toFixed(2)}" y="${(c.y + off.nameDy).toFixed(2)}" text-anchor="middle" class="map-city-name" style="font-size:${nameFs.toFixed(2)}px">${c.name}</text>
+        <text x="${(c.x + off.factionDx).toFixed(2)}" y="${(c.y + off.factionDy).toFixed(2)}" text-anchor="middle" class="map-city-faction" style="font-size:${factionFs.toFixed(2)}px">${faction}</text>
       </g>`
     })
     .join('')
@@ -114,13 +181,18 @@ export function renderCampaignMap(opts: CampaignMapOpts): string {
     .map((m, i) => {
       const from = getCity(m.fromCityId)
       const to = getCity(m.toCityId)
-      const mx = (from.x + to.x) / 2
-      const my = (from.y + to.y) / 2 - 2
+      const dx = to.x - from.x
+      const dy = to.y - from.y
+      const len = Math.hypot(dx, dy) || 1
+      const nx = -dy / len
+      const ny = dx / len
+      const mx = (from.x + to.x) / 2 + nx * 3.2 * u
+      const my = (from.y + to.y) / 2 + ny * 3.2 * u
       const label = m.note ? `${m.actor}・${m.note}` : m.actor
       return `
       <g class="map-move" style="--i:${i}">
-        <line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" class="map-arrow-line" marker-end="url(#map-arrowhead)" />
-        <text x="${mx}" y="${my}" text-anchor="middle" class="map-move-label">${label}</text>
+        <line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" class="map-arrow-line" marker-end="url(#map-arrowhead)" style="stroke-width:${(0.9 * u).toFixed(2)}" />
+        <text x="${mx.toFixed(2)}" y="${my.toFixed(2)}" text-anchor="middle" class="map-move-label" style="font-size:${moveFs.toFixed(2)}px">${label}</text>
       </g>`
     })
     .join('')
@@ -153,10 +225,13 @@ export function renderCampaignMap(opts: CampaignMapOpts): string {
     )
     .join('')
 
+  const riverVisible =
+    fit.x0 < 72 && fit.x0 + fit.side > 18 && fit.y0 < 70 && fit.y0 + fit.side > 30
+
   return `
   <div class="campaign-theater">
     <div class="campaign-map-pane">
-      <svg class="campaign-map" viewBox="0 0 100 100" role="img" aria-label="${opts.title}戰略圖" preserveAspectRatio="xMidYMid meet">
+      <svg class="campaign-map" viewBox="${fit.viewBox}" role="img" aria-label="${opts.title}戰略圖" preserveAspectRatio="xMidYMid meet">
         <defs>
           <marker id="map-arrowhead" markerWidth="5" markerHeight="5" refX="4.2" refY="2.5" orient="auto">
             <path d="M0,0 L5,2.5 L0,5 Z" fill="#e8c56a" />
@@ -166,8 +241,8 @@ export function renderCampaignMap(opts: CampaignMapOpts): string {
             <stop offset="100%" stop-color="#1a140e"/>
           </linearGradient>
         </defs>
-        <rect width="100" height="100" fill="url(#map-land)" rx="1.5" />
-        <path class="map-river" d="M18,30 Q35,38 48,52 T72,70" fill="none" />
+        <rect x="${fit.x0}" y="${fit.y0}" width="${fit.side}" height="${fit.side}" fill="url(#map-land)" rx="${(1.5 * u).toFixed(2)}" />
+        ${riverVisible ? `<path class="map-river" d="M18,30 Q35,38 48,52 T72,70" fill="none" style="stroke-width:${(1.2 * u).toFixed(2)}" />` : ''}
         ${arrows}
         ${markers}
       </svg>
