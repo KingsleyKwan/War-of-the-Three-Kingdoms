@@ -1,1 +1,0 @@
-console.error('Temporary: full v0.14.1 bundle pending large-file deploy. Please check back shortly.'); document.getElementById('app').innerHTML = '<div style="padding:2rem;color:#f5e6c8;font-family:serif;text-align:center"><h1>單機三國殺</h1><p>v0.14.1 部署中（大型 JS 上傳中）…</p><p>地圖自動縮放 + 魏蜀吳劇情關卡已擴充，稍後刷新即可。</p></div>';
