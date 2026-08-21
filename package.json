@@ -8,9 +8,11 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "smoke": "bash scripts/smoke-pages-game.sh",
-    "test:skills": "npx --yes tsx scripts/skill-match-review.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "test:skills": "tsx scripts/skill-match-review.ts"
   },
   "devDependencies": {
+    "tsx": "^4.23.12",
     "typescript": "~5.9.0",
     "vite": "^6.3.0"
   }

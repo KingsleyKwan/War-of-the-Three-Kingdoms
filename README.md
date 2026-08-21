@@ -16,6 +16,8 @@ GitHub Pages: https://kingsleykwan.github.io/War-of-the-Three-Kingdoms/
 npm install
 npm run dev
 npm run build   # outputs to docs/ for Pages
+npm test        # unit tests for skill / targeting / damage logic
+npm run test:skills  # longer headless AI match review
 ```
 
 ## Version
