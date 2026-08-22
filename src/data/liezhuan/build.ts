@@ -1,5 +1,5 @@
 import type { PackId, VictoryRule } from "../../engine/types";
-import type { CampaignDef, CampaignStage } from "../campaigns/types";
+import type { CampaignDef, CampaignStage, StageSetup } from "../campaigns/types";
 import { getGeneral } from "../generals";
 
 export type Side = string | { id: string; name?: string };
@@ -19,6 +19,7 @@ export interface LzDraft {
   packs?: PackId[];
   next?: string;
   survive?: number;
+  setup?: StageSetup;
 }
 
 const FACTION: Record<string, string> = {
@@ -97,6 +98,7 @@ export function makeStages(generalId: string, drafts: LzDraft[]): CampaignStage[
       allyChoices: d.allyChoices,
       enemies: d.enemies.map(norm),
       victory,
+      setup: d.setup,
     };
   });
 }
