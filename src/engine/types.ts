@@ -188,6 +188,21 @@ export interface VictoryRule {
   rounds?: number
 }
 
+/** Preset starting board for story / tutorial stages */
+export interface SeatSetup {
+  hp?: number
+  maxHp?: number
+  handKinds?: string[]
+  handCount?: number
+  equipKinds?: string[]
+}
+
+export interface StageBoardSetup {
+  player?: SeatSetup
+  allies?: SeatSetup
+  enemies?: SeatSetup
+}
+
 export interface MatchConfig {
   mode: GameMode
   packs: PackId[]
@@ -206,6 +221,7 @@ export interface MatchConfig {
   }>
   victory?: VictoryRule
   campaignStageId?: string
+  boardSetup?: StageBoardSetup
   /** Free play: defer dealing until generals are picked */
   deferGeneralPick?: boolean
   /** Offered generals for human (random 3 or full list) */
