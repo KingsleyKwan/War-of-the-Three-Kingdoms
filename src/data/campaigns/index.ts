@@ -1,4 +1,5 @@
 import { LIEZHUAN_CAMPAIGNS } from '../liezhuan'
+import { TUTORIAL_CAMPAIGN, TUTORIAL_CAMPAIGN_ID, isTutorialId } from './tutorial'
 import {
   buildFreeMatch,
   buildStageEpilogue,
@@ -13,6 +14,7 @@ import { WU_CAMPAIGN_ID, WU_STAGES } from './wu'
 import type { CampaignDef, CampaignStage } from './types'
 
 export type { CampaignDef, CampaignStage }
+export { TUTORIAL_CAMPAIGN, TUTORIAL_CAMPAIGN_ID, isTutorialId }
 export {
   buildFreeMatch,
   buildStageEpilogue,
@@ -43,7 +45,7 @@ export const CAMPAIGNS: CampaignDef[] = [
 ]
 
 export function allStoryCampaigns(): CampaignDef[] {
-  return [...CAMPAIGNS, ...LIEZHUAN_CAMPAIGNS]
+  return [TUTORIAL_CAMPAIGN, ...CAMPAIGNS, ...LIEZHUAN_CAMPAIGNS]
 }
 
 export function getCampaign(id: string): CampaignDef | undefined {

@@ -1,5 +1,11 @@
-import type { PackId, VictoryRule } from '../../engine/types'
+import type { PackId, SeatSetup, VictoryRule } from '../../engine/types'
 import type { MapMovement } from './map'
+
+export interface StageSetup {
+  player?: SeatSetup
+  allies?: SeatSetup
+  enemies?: SeatSetup
+}
 
 export interface CampaignStage {
   id: string
@@ -41,6 +47,8 @@ export interface CampaignStage {
   allyChoices?: string[]
   enemies: Array<{ generalId: string; name?: string }>
   victory: VictoryRule
+  /** Optional starting HP / equips / hand for this battlefield */
+  setup?: StageSetup
 }
 
 export interface CampaignDef {
