@@ -2,6 +2,7 @@ import { LIEZHUAN_CAMPAIGNS } from '../liezhuan'
 import { TUTORIAL_CAMPAIGN, TUTORIAL_CAMPAIGN_ID, isTutorialId } from './tutorial'
 import {
   buildFreeMatch,
+  buildMultiplayerMatch,
   buildStageEpilogue,
   buildStageMatch,
   CAOCAO_CAMPAIGN_ID,
@@ -17,6 +18,7 @@ export type { CampaignDef, CampaignStage }
 export { TUTORIAL_CAMPAIGN, TUTORIAL_CAMPAIGN_ID, isTutorialId }
 export {
   buildFreeMatch,
+  buildMultiplayerMatch,
   buildStageEpilogue,
   buildStageMatch,
   resolveGeneralId,
