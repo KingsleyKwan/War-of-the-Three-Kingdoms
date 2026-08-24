@@ -54,7 +54,7 @@ export function applyPlayerAction(
       activateSkill(g, seatId, action.skillId)
       break
     case 'pick_general':
-      confirmGeneralPick(g, action.generalId)
+      confirmGeneralPick(g, action.generalId, seatId)
       break
     default:
       break
