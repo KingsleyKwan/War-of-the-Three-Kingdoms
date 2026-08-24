@@ -107,7 +107,7 @@ export function renderLobby(vm: LobbyViewModel): string {
         </label>
         <button type="button" class="btn" id="lobby-join">加入房間</button>
       </div>
-      <p class="hint">人數不足會用電腦補位。房主開始後即開局。</p>
+      <p class="hint">人數不足會用電腦補位。房主開始後即開局。<br/>連線：PeerJS（無需自架伺服器）</p>
     </div>`
   }
 
@@ -152,10 +152,10 @@ export function renderLobby(vm: LobbyViewModel): string {
 
 function escapeHtml(s: string): string {
   return s
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 function escapeAttr(s: string): string {
