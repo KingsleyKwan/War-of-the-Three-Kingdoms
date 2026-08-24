@@ -333,6 +333,7 @@ function onMpMessage(msg: import('../multiplayer').ServerMsg): void {
   if (msg.type === 'room') {
     app.lobbyVm.room = msg.room
     app.lobbyVm.isHost = msg.room.hostClientId === client.clientId
+    app.lobbyVm.error = null // clear "正在建立/加入…"
     // Track local seat
     const mine = msg.room.seats.find((s) => s.clientId === client.clientId)
     app.localSeatId = mine ? mine.id : app.localSeatId
@@ -452,19 +453,24 @@ function bindLobby(): void {
     const name = nameInput?.value.trim() || '房主'
     const client = ensureMpClient()
     const room = createLocalRoom(client.clientId, name, maxPlayers)
+    // Don't show room code until PeerJS host is actually registered
+    // (otherwise guests join too early → 無法連上房主)
     app.lobbyVm = {
       ...vm,
       localName: name,
-      room,
+      room: null,
       isHost: true,
       myClientId: client.clientId,
-      error: client.isOnline ? null : '本地預覽模式（未設定 VITE_PARTYKIT_HOST）',
+      error: client.isOnline
+        ? '正在建立房間（連線 PeerJS）…'
+        : '本地預覽模式（VITE_MP_OFFLINE=1）',
     }
     app.localSeatId = 0
-    void client.connect(room.roomId)
-    // Push initial room so Party storage matches
-    client.send({ type: 'host_room', room })
     render()
+    void client.connect(room.roomId)
+    // Host claims Peer ID via first host_room message;
+    // onMpMessage(type: room) will fill lobbyVm.room when ready
+    client.send({ type: 'host_room', room })
   }
 
   root().querySelector('#lobby-create-5')?.addEventListener('click', () => createRoom(5))
@@ -485,12 +491,15 @@ function bindLobby(): void {
       joinCode: code,
       isHost: false,
       myClientId: client.clientId,
-      error: client.isOnline ? null : '本地預覽模式無法真正加入其他房間',
+      error: client.isOnline
+        ? `正在加入房間 ${code}…`
+        : '本地預覽模式無法真正加入其他房間',
     }
+    render()
+    // Guest role is set by the join message (PeerJS)
     void client.connect(code).then(() => {
       client.send({ type: 'join', name })
     })
-    render()
   })
 
   root().querySelector('#lobby-copy')?.addEventListener('click', () => {
