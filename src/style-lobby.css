@@ -187,6 +187,71 @@
   opacity: 0.45;
   font-style: italic;
 }
+
+/* ── Multiplayer lobby ── */
+.lobby-screen {
+  max-width: 28rem;
+  margin: 0 auto;
+}
+.lobby-panel {
+  margin-top: 0.5rem;
+}
+.lobby-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+}
+.lobby-error {
+  color: #e09080;
+  text-align: center;
+  margin: 0.5rem 0;
+}
+.lobby-code-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.75rem;
+}
+.lobby-code {
+  font-size: 1.4rem;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+}
+.lobby-seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.lobby-seat {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  background: #2a2118e0;
+  border: 1px solid rgba(196, 163, 90, 0.22);
+  border-radius: 4px;
+}
+.lobby-seat .idx {
+  color: var(--gold);
+  font-size: 0.85rem;
+  min-width: 1.2rem;
+}
+.lobby-seat.seat-human {
+  border-color: rgba(196, 163, 90, 0.55);
+}
+.lobby-seat.seat-ai {
+  opacity: 0.75;
+}
+.lobby-seat.seat-empty {
+  opacity: 0.45;
+  font-style: italic;
+}
+
 .seat.human-remote {
   border-color: rgba(122, 175, 212, 0.55);
 }
+
