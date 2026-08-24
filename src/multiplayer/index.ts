@@ -8,9 +8,10 @@
  * 4. AI turns run on host via runAiUntilHuman; snapshot re-broadcast
  * 5. Remote human actions: ClientMsg.action → remote_action → host applies
  *
- * PartyKit:
- *   VITE_PARTYKIT_HOST=xxx.partykit.dev npm run dev
- *   npm run party:dev
+ * Transport (default = PeerJS, no self-hosted server):
+ *   npm run dev                          → PeerJS public cloud (0.peerjs.com)
+ *   VITE_MP_OFFLINE=1 npm run dev        → local mock (single tab)
+ *   VITE_PARTYKIT_HOST=xxx npm run dev   → legacy PartyKit
  */
 
 export type {
