@@ -3,16 +3,32 @@ import { formatSeatMindHtml } from '../ai/mind'
 import { getCardDef } from '../data/cards'
 import {
   buildFreeMatch,
+  buildMultiplayerMatch,
   buildStageEpilogue,
   buildStageMatch,
   CAMPAIGNS,
   findStage,
   getCampaign,
+  isTutorialId,
   loadCampaignProgress,
   resolveStagePacks,
+  TUTORIAL_CAMPAIGN_ID,
   unlockNextStage,
   type CampaignStage,
 } from '../data/campaigns'
+import { isTutorialMatch, nextActionHint, tutorialIntroSlides } from './coach'
+import {
+  createMultiplayerClient,
+  createLocalRoom,
+  fillEmptyWithAi,
+  initialLobbyVm,
+  renderLobby,
+  applyPlayerAction,
+  parsePlayerAction,
+  type LobbyViewModel,
+  type MultiplayerClient,
+  type PlayerAction,
+} from '../multiplayer'
 import { renderCampaignMap } from '../data/campaigns/map'
 import { getGeneral, listGeneralsForPick } from '../data/generals'
 import { CARD_HELP, rankLabel, suitName, suitSymbol } from '../data/help'
@@ -53,6 +69,11 @@ import {
   isAchievementUnlocked,
   listAchievementDefs,
 } from '../persist/achievements'
+import {
+  loadTutorialMeta,
+  markTutorialAsked,
+  markTutorialCompleted,
+} from '../persist/tutorial'
 import { APP_VERSION } from '../version'
 
 type Screen =
@@ -66,6 +87,7 @@ type Screen =
   | 'table'
   | 'epilogue'
   | 'result'
+  | 'lobby'
 
 interface AppState {
   screen: Screen
@@ -87,6 +109,13 @@ interface AppState {
   matchPaused: boolean
   unlockBanners: UnlockBanner[]
   liezhuanFilter: 'all' | 'wei' | 'shu' | 'wu' | 'qun'
+  /** Tutorial coach slide index (0-based); -1 = dismissed for this match */
+  coachSlide: number
+  /** Multiplayer lobby */
+  lobbyVm: LobbyViewModel
+  mpClient: MultiplayerClient | null
+  /** Seat index of this client in multiplayer (null = solo) */
+  localSeatId: number | null
 }
 
 const app: AppState = {
@@ -106,9 +135,39 @@ const app: AppState = {
   matchPaused: false,
   unlockBanners: [],
   liezhuanFilter: 'all',
+  coachSlide: 0,
+  lobbyVm: initialLobbyVm(),
+  mpClient: null,
+  localSeatId: null,
 }
 
 const root = () => document.querySelector<HTMLDivElement>('#app')!
+
+
+/** Local player seat in solo or multiplayer. */
+function localHuman(g: GameSnapshot): PlayerState {
+  if (app.localSeatId != null && g.players[app.localSeatId]) {
+    return g.players[app.localSeatId]!
+  }
+  return g.players.find((p) => p.isHuman) ?? g.players[0]!
+}
+
+function isMultiplayer(): boolean {
+  return app.mpClient != null && app.lobbyVm.room != null
+}
+
+/** Host or solo: apply locally. Guest: send action to host. */
+function dispatchAction(g: GameSnapshot, action: PlayerAction): void {
+  const human = localHuman(g)
+  if (isMultiplayer() && !app.lobbyVm.isHost) {
+    app.mpClient?.send({ type: 'action', action })
+    return
+  }
+  applyPlayerAction(g, human.id, action)
+  if (isMultiplayer() && app.lobbyVm.isHost) {
+    app.mpClient?.send({ type: 'host_match', match: g })
+  }
+}
 
 export function startApp(): void {
   render()
@@ -120,6 +179,10 @@ function render(): void {
     case 'start':
       el.innerHTML = renderStart()
       bindStart()
+      break
+    case 'lobby':
+      el.innerHTML = renderLobby(app.lobbyVm)
+      bindLobby()
       break
     case 'setup':
       el.innerHTML = renderSetup()
@@ -188,6 +251,22 @@ function renderDetailModal(body: string): string {
   </div>`
 }
 
+function renderFirstPlayAsk(): string {
+  if (loadTutorialMeta().asked) return ''
+  return `<div class="modal-backdrop" id="tut-ask-backdrop"></div>
+  <div class="modal first-play-modal" role="dialog" aria-modal="true">
+    <div class="modal-body">
+      <p class="coach-kicker">新手</p>
+      <h3>要不要先打教學關卡？</h3>
+      <p>共三關，每一步會有框框講解：基本牌、錦囊裝備、瀕死求桃。之後也可從標題畫面再進教學。</p>
+    </div>
+    <div class="cta-row modal-actions">
+      <button type="button" class="btn primary" id="tut-yes">開始教學</button>
+      <button type="button" class="btn ghost" id="tut-later">稍後再說</button>
+    </div>
+  </div>`
+}
+
 function renderStart(): string {
   return `
   <div class="screen start-screen">
@@ -198,20 +277,40 @@ function renderStart(): string {
       <p class="tagline">E殺風格・自由對戰、三國傳記與武將列傳</p>
       <div class="cta-row">
         <button type="button" class="btn primary" data-go="setup">自由對戰</button>
+        <button type="button" class="btn" data-go="tutorial">教學關卡</button>
         <button type="button" class="btn" data-go="story">劇情模式</button>
         <button type="button" class="btn" data-go="liezhuan">武將列傳</button>
         <button type="button" class="btn" data-go="achievements">成就</button>
+        <button type="button" class="btn" data-go="lobby">多人對戰</button>
         <button type="button" class="btn ghost" data-go="settings">設定</button>
       </div>
       <p class="version" id="app-version">v${APP_VERSION}</p>
     </div>
+    ${renderFirstPlayAsk()}
   </div>`
 }
 
+function openTutorialList(): void {
+  markTutorialAsked()
+  app.storyKind = 'campaign'
+  app.campaignId = TUTORIAL_CAMPAIGN_ID
+  app.screen = 'story'
+  render()
+}
+
 function bindStart(): void {
+  root().querySelector('#tut-yes')?.addEventListener('click', () => openTutorialList())
+  root().querySelector('#tut-later')?.addEventListener('click', () => {
+    markTutorialAsked()
+    render()
+  })
   root().querySelectorAll('[data-go]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const go = (btn as HTMLElement).dataset.go as Screen
+      const go = (btn as HTMLElement).dataset.go as string
+      if (go === 'tutorial') {
+        openTutorialList()
+        return
+      }
       if (go === 'story') {
         app.storyKind = 'campaign'
         app.campaignId = null
@@ -220,10 +319,237 @@ function bindStart(): void {
         app.storyKind = 'liezhuan'
         app.campaignId = null
       }
-      app.screen = go
+      app.screen = go as Screen
       render()
     })
   })
+}
+
+
+
+function onMpMessage(msg: import('../multiplayer').ServerMsg): void {
+  const client = app.mpClient
+  if (!client) return
+  if (msg.type === 'room') {
+    app.lobbyVm.room = msg.room
+    app.lobbyVm.isHost = msg.room.hostClientId === client.clientId
+    // Track local seat
+    const mine = msg.room.seats.find((s) => s.clientId === client.clientId)
+    app.localSeatId = mine ? mine.id : app.localSeatId
+    if (msg.room.status === 'playing' && msg.room.match) {
+      app.game = msg.room.match
+      app.screen = 'table'
+    }
+    render()
+  } else if (msg.type === 'match') {
+    app.game = msg.match
+    app.selectedUid = null
+    app.fxSettledSeq = null
+    app.matchEndPending = false
+    app.matchPaused = false
+    app.aiBusy = false
+    app.stage = null
+    app.screen = 'table'
+    render()
+    // Host continues AI if needed
+    if (app.lobbyVm.isHost && app.game) {
+      void runAiUntilHuman(app.game, () => {
+        if (app.screen === 'table') render()
+      })
+    }
+  } else if (msg.type === 'remote_action') {
+    if (!app.lobbyVm.isHost || !app.game) return
+    const seat = app.lobbyVm.room?.seats.find((s) => s.clientId === msg.clientId)
+    if (!seat || seat.type !== 'human') return
+    const action = parsePlayerAction(msg.action)
+    if (!action) return
+    // Only accept when it's that seat's turn (or general pick)
+    const g = app.game
+    const actor = g.prompt.actorId
+    if (g.matchPhase !== 'pick_general' && actor !== null && actor !== seat.id) return
+    applyPlayerAction(g, seat.id, action)
+    app.mpClient?.send({ type: 'host_match', match: g })
+    void continueAi()
+  } else if (msg.type === 'error') {
+    app.lobbyVm.error = msg.message
+    if (msg.message.includes('離開') || msg.message.includes('關閉')) {
+      app.mpClient?.disconnect()
+      app.mpClient = null
+      app.lobbyVm = initialLobbyVm()
+      app.localSeatId = null
+      app.screen = 'start'
+    }
+    render()
+  }
+}
+
+function ensureMpClient(): MultiplayerClient {
+  if (!app.mpClient) {
+    app.mpClient = createMultiplayerClient()
+    app.mpClient.onMessage(onMpMessage)
+  }
+  return app.mpClient
+}
+
+function hostStartMatch(): void {
+  if (!app.lobbyVm.room || !app.lobbyVm.isHost) return
+  const filled = fillEmptyWithAi(app.lobbyVm.room)
+  const mode = filled.maxPlayers >= 8 ? 'identity8' : 'identity5'
+  try {
+    const config = buildMultiplayerMatch({
+      mode,
+      packs: app.settings.enabledPacks,
+      forceSelectGeneral: app.settings.forceSelectGeneral,
+      seats: filled.seats.map((s) => ({
+        name: s.name,
+        isHuman: s.type === 'human',
+      })),
+    })
+    const match = createMatch(config)
+    const room = { ...filled, status: 'playing' as const, match }
+    app.lobbyVm.room = room
+    app.game = match
+    app.localSeatId = filled.seats.find((s) => s.clientId === app.mpClient?.clientId)?.id ?? 0
+    app.selectedUid = null
+    app.fxSettledSeq = null
+    app.matchEndPending = false
+    app.matchPaused = false
+    app.stage = null
+    // Broadcast to others
+    app.mpClient?.send({ type: 'host_room', room })
+    app.mpClient?.send({ type: 'host_match', match })
+    app.screen = 'table'
+    render()
+    void runAiUntilHuman(match, () => {
+      if (app.screen === 'table') render()
+      // Keep others in sync after AI moves
+      if (app.lobbyVm.isHost && app.game) {
+        app.mpClient?.send({ type: 'host_match', match: app.game })
+      }
+    })
+  } catch (e) {
+    app.lobbyVm.error = e instanceof Error ? e.message : '開局失敗'
+    render()
+  }
+}
+
+function bindLobby(): void {
+  const vm = app.lobbyVm
+
+  root().querySelector('[data-go="start"]')?.addEventListener('click', () => {
+    app.mpClient?.disconnect()
+    app.mpClient = null
+    app.lobbyVm = initialLobbyVm()
+    app.localSeatId = null
+    app.screen = 'start'
+    render()
+  })
+
+  const nameInput = root().querySelector<HTMLInputElement>('#lobby-name')
+  const codeInput = root().querySelector<HTMLInputElement>('#lobby-code')
+
+  const createRoom = (maxPlayers: number) => {
+    const name = nameInput?.value.trim() || '房主'
+    const client = ensureMpClient()
+    const room = createLocalRoom(client.clientId, name, maxPlayers)
+    app.lobbyVm = {
+      ...vm,
+      localName: name,
+      room,
+      isHost: true,
+      myClientId: client.clientId,
+      error: client.isOnline ? null : '本地預覽模式（未設定 VITE_PARTYKIT_HOST）',
+    }
+    app.localSeatId = 0
+    void client.connect(room.roomId)
+    // Push initial room so Party storage matches
+    client.send({ type: 'host_room', room })
+    render()
+  }
+
+  root().querySelector('#lobby-create-5')?.addEventListener('click', () => createRoom(5))
+  root().querySelector('#lobby-create-8')?.addEventListener('click', () => createRoom(8))
+
+  root().querySelector('#lobby-join')?.addEventListener('click', () => {
+    const name = nameInput?.value.trim() || '玩家'
+    const code = (codeInput?.value || '').trim().toUpperCase()
+    if (!code) {
+      app.lobbyVm.error = '請輸入房號'
+      render()
+      return
+    }
+    const client = ensureMpClient()
+    app.lobbyVm = {
+      ...vm,
+      localName: name,
+      joinCode: code,
+      isHost: false,
+      myClientId: client.clientId,
+      error: client.isOnline ? null : '本地預覽模式無法真正加入其他房間',
+    }
+    void client.connect(code).then(() => {
+      client.send({ type: 'join', name })
+    })
+    render()
+  })
+
+  root().querySelector('#lobby-copy')?.addEventListener('click', () => {
+    const id = app.lobbyVm.room?.roomId
+    if (id) void navigator.clipboard?.writeText(id)
+  })
+
+  root().querySelector('#lobby-leave')?.addEventListener('click', () => {
+    app.mpClient?.send({ type: 'leave' })
+    app.mpClient?.disconnect()
+    app.mpClient = null
+    app.lobbyVm = initialLobbyVm()
+    app.localSeatId = null
+    app.screen = 'start'
+    render()
+  })
+
+  root().querySelector('#lobby-start')?.addEventListener('click', () => {
+    hostStartMatch()
+  })
+}
+
+
+function formatSetupIntel(s: CampaignStage): string {
+  const setup = s.setup
+  if (!setup) return ''
+  const bits: string[] = []
+  const p = setup.player
+  if (p?.equipKinds?.length) bits.push(`你裝備：${p.equipKinds.join('、')}`)
+  if (p?.handKinds?.length) bits.push(`你指定手牌：${p.handKinds.join('、')}`)
+  if (p?.handCount != null) bits.push(`你手牌數 ${p.handCount}`)
+  if (p?.hp != null || p?.maxHp != null) {
+    bits.push(`你體力 ${p.hp ?? p.maxHp}/${p.maxHp ?? p.hp}`)
+  }
+  const e = setup.enemies
+  if (e?.hp != null || e?.maxHp != null) bits.push(`敵體力 ${e.hp ?? e.maxHp}/${e.maxHp ?? e.hp}`)
+  if (e?.equipKinds?.length) bits.push(`敵裝備：${e.equipKinds.join('、')}`)
+  if (!bits.length) return ''
+  return `<p class="intel-pack">特殊開局：${bits.map(escapeHtml).join('　·　')}</p>`
+}
+
+function renderCoachOverlay(g: GameSnapshot): string {
+  if (!isTutorialMatch(g) || app.coachSlide < 0 || g.winnerIds) return ''
+  const slides = tutorialIntroSlides(g.config.campaignStageId)
+  if (!slides.length || app.coachSlide >= slides.length) return ''
+  const slide = slides[app.coachSlide]!
+  const n = slides.length
+  const last = app.coachSlide >= n - 1
+  return `<div class="coach-layer" role="dialog" aria-modal="true">
+    <div class="coach-box">
+      <p class="coach-kicker">教學 ${app.coachSlide + 1}/${n}</p>
+      <h3>${escapeHtml(slide.title)}</h3>
+      <p>${escapeHtml(slide.body)}</p>
+      <div class="coach-actions">
+        <button type="button" class="btn primary" id="coach-next">${last ? '開始實戰' : '下一步'}</button>
+        <button type="button" class="btn ghost" id="coach-skip">略過本關講解</button>
+      </div>
+    </div>
+  </div>`
 }
 
 function kingdomLabel(k: string): string {
@@ -554,9 +880,13 @@ function renderStoryList(): string {
   <div class="screen panel-screen">
     <header class="topbar">
       <button type="button" class="btn ghost" data-back-campaigns>${
-        app.storyKind === 'liezhuan' ? '列傳列表' : '傳記列表'
+        isTutorialId(app.campaignId)
+          ? '返回標題'
+          : app.storyKind === 'liezhuan'
+            ? '列傳列表'
+            : '傳記列表'
       }</button>
-      <h2>劇情・${escapeHtml(campaign.title)}</h2>
+      <h2>${isTutorialId(app.campaignId) ? escapeHtml(campaign.title) : `劇情・${escapeHtml(campaign.title)}`}</h2>
     </header>
     <p class="story-intro">${escapeHtml(campaign.blurb)}</p>
     <ul class="stage-list">
@@ -583,6 +913,12 @@ function bindStoryList(): void {
     render()
   })
   root().querySelector('[data-back-campaigns]')?.addEventListener('click', () => {
+    if (isTutorialId(app.campaignId)) {
+      app.campaignId = null
+      app.screen = 'start'
+      render()
+      return
+    }
     if (app.storyKind === 'liezhuan') {
       app.campaignId = null
       app.screen = 'liezhuan'
@@ -666,6 +1002,7 @@ function renderStageBrief(): string {
             ? `堅守突圍 ${s.victory.rounds ?? 4} 輪（或擊潰追兵）`
             : '殲滅敵軍'
       }</p>
+      ${formatSetupIntel(s)}
     </section>`
 
   const mapHtml = renderCampaignMap({
@@ -730,6 +1067,7 @@ async function startStageMatch(): Promise<void> {
   app.fxSettledSeq = null
   app.matchEndPending = false
   app.matchPaused = false
+  app.coachSlide = 0
   app.screen = 'table'
   render()
   await continueAi()
@@ -765,7 +1103,7 @@ function renderMatchEndOverlay(g: GameSnapshot): string {
 
 function renderTable(): string {
   const g = app.game!
-  const human = g.players.find((p) => p.isHuman)!
+  const human = localHuman(g)
   const prompt = g.prompt
   const picking = g.matchPhase === 'pick_general'
   const matchEnded = !!g.winnerIds
@@ -785,8 +1123,10 @@ function renderTable(): string {
     if (wuxieFog) {
       return `<div class="thinking">有角色正在考慮是否使用【無懈可擊】…</div>`
     }
-    if (app.aiBusy && prompt.actorId !== null && !g.players[prompt.actorId]?.isHuman) {
-      return `<div class="thinking">${seatRefHtml(g.players[prompt.actorId].name, prompt.actorId)} 思考中…</div>`
+    if (prompt.actorId !== null && prompt.actorId !== human.id && (app.aiBusy || isMultiplayer())) {
+      const who = g.players[prompt.actorId]
+      const label = who?.isHuman ? '操作中' : '思考中'
+      return `<div class="thinking">${seatRefHtml(who.name, prompt.actorId)} ${label}…</div>`
     }
     return ''
   })()
@@ -797,6 +1137,11 @@ function renderTable(): string {
     generalName: p.generalId ? getGeneral(p.generalId).name : undefined,
   }))
 
+  const actionHint = (() => {
+    if (matchEnded) return ''
+    if (wuxieFog) return '等待【無懈可擊】結算…'
+    return nextActionHint(g, app.selectedUid)
+  })()
   const promptBarText = (() => {
     if (app.selectedUid && prompt.kind === 'choose_card') {
       return '已選取手牌 — 再點一次同一張牌以打出，或點其他牌改選'
@@ -806,9 +1151,10 @@ function renderTable(): string {
     }
     return prompt.message || '等待中…'
   })()
+  const humanTurnLoud = isHumanTurn && !matchEnded
 
   return `
-  <div class="screen table-screen ${matchEnded ? 'match-ended' : ''} ${app.matchPaused ? 'match-paused' : ''}">
+  <div class="screen table-screen ${matchEnded ? 'match-ended' : ''} ${app.matchPaused ? 'match-paused' : ''} ${isTutorialMatch(g) ? 'tutorial-match' : ''}">
     <header class="battle-top">
       <div>
         <strong>${picking ? '選將階段' : `第 ${g.round} 輪`}</strong>
@@ -858,7 +1204,7 @@ function renderTable(): string {
             ? `<button type="button" class="info-btn" data-info-seat="${p.id}" title="詳情" aria-label="詳情">ℹ</button>`
             : ''
           return `<div class="seat-wrap" style="--angle:${angle}deg;--seat-c:${c}" data-visual="${visual}" data-seat-pos="${p.id}">
-            <div class="seat ${p.alive ? '' : 'dead'} ${active ? 'active' : ''} ${p.isHuman ? 'human' : ''} ${targetable ? 'targetable' : ''} ${reach} ${picking && !hasGen ? 'hidden-gen' : ''} ${hurt ? 'hurt' : ''}" data-seat="${p.id}" role="${targetable ? 'button' : 'group'}" tabindex="${targetable ? '0' : '-1'}">
+            <div class="seat ${p.alive ? '' : 'dead'} ${active ? 'active' : ''} ${p.id === human.id ? 'human' : (p.isHuman ? 'human-remote' : '')} ${targetable ? 'targetable' : ''} ${reach} ${picking && !hasGen ? 'hidden-gen' : ''} ${hurt ? 'hurt' : ''}" data-seat="${p.id}" role="${targetable ? 'button' : 'group'}" tabindex="${targetable ? '0' : '-1'}">
               ${portrait}
               <div class="seat-head">
                 <span class="seat-gen">${gen ? escapeHtml(gen.name) : '未亮將'}</span>
@@ -879,7 +1225,13 @@ function renderTable(): string {
         .join('')}
       ${renderArenaFx(g, human.id, n)}
     </div>
-    <div class="prompt-bar">${colorizeSeatNamesInText(promptBarText, namedSeats)}</div>
+    ${
+      actionHint
+        ? `<div class="action-hint ${humanTurnLoud ? 'loud' : ''}" role="status">${escapeHtml(actionHint)}</div>`
+        : ''
+    }
+    <div class="prompt-bar ${humanTurnLoud ? 'prompt-loud' : ''}">${colorizeSeatNamesInText(promptBarText, namedSeats)}</div>
+    ${renderCoachOverlay(g)}
     ${picking ? renderGeneralPickPanel(g) : ''}
     ${
       !picking && isHumanTurn && (prompt.kind === 'choice' || prompt.kind === 'skill_cards')
@@ -1285,15 +1637,26 @@ async function continueAi(): Promise<void> {
   app.aiBusy = true
   render()
   try {
+    // Guests never run AI — host is authoritative
+    if (isMultiplayer() && !app.lobbyVm.isHost) {
+      return
+    }
     await runAiUntilHuman(
       g,
       () => {
         if (app.screen === 'table' && app.game === g) render()
+        // Host keeps guests in sync during AI turns
+        if (isMultiplayer() && app.lobbyVm.isHost && app.game) {
+          app.mpClient?.send({ type: 'host_match', match: app.game })
+        }
       },
       () => app.matchPaused,
     )
   } finally {
     app.aiBusy = false
+  }
+  if (isMultiplayer() && app.lobbyVm.isHost && app.game) {
+    app.mpClient?.send({ type: 'host_match', match: app.game })
   }
   if (app.matchPaused) {
     render()
@@ -1328,7 +1691,18 @@ function scrollLogToLatest(): void {
 
 function bindTable(): void {
   const g = app.game!
-  const human = g.players.find((p) => p.isHuman)!
+  const human = localHuman(g)
+
+  root().querySelector('#coach-next')?.addEventListener('click', () => {
+    const slides = tutorialIntroSlides(g.config.campaignStageId)
+    if (app.coachSlide + 1 >= slides.length) app.coachSlide = -1
+    else app.coachSlide += 1
+    render()
+  })
+  root().querySelector('#coach-skip')?.addEventListener('click', () => {
+    app.coachSlide = -1
+    render()
+  })
 
   root().querySelectorAll('[data-choice]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1339,7 +1713,7 @@ function bindTable(): void {
       )
         return
       const id = (btn as HTMLElement).dataset.choice!
-      resolveChoice(g, human.id, id)
+      dispatchAction(g, { type: 'choice', choiceId: id })
       void continueAi()
     })
   })
@@ -1348,7 +1722,7 @@ function bindTable(): void {
     btn.addEventListener('click', () => {
       if (app.aiBusy || g.prompt.kind !== 'choose_card' || g.prompt.actorId !== human.id) return
       const id = (btn as HTMLElement).dataset.skill!
-      activateSkill(g, human.id, id)
+      dispatchAction(g, { type: 'skill', skillId: id })
       app.selectedUid = null
       void continueAi()
     })
@@ -1365,7 +1739,7 @@ function bindTable(): void {
   root().querySelectorAll('[data-pick-gen]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = (btn as HTMLElement).dataset.pickGen!
-      confirmGeneralPick(g, id)
+      dispatchAction(g, { type: 'pick_general', generalId: id })
       app.detailHtml = null
       render()
       void continueAi()
@@ -1403,19 +1777,19 @@ function bindTable(): void {
           render()
           return
         }
-        selectCard(g, human.id, uid)
+        dispatchAction(g, { type: 'select_card', uid })
         app.selectedUid = null
         void continueAi()
         return
       }
       // Skill multi-card pick: toggle selection
       if (g.prompt.kind === 'skill_cards') {
-        selectCard(g, human.id, uid)
+        dispatchAction(g, { type: 'select_card', uid })
         render()
         return
       }
       // Responses / discard: single click
-      selectCard(g, human.id, uid)
+      dispatchAction(g, { type: 'select_card', uid })
       app.selectedUid = null
       void continueAi()
     })
@@ -1430,25 +1804,25 @@ function bindTable(): void {
     btn.addEventListener('click', () => {
       if (app.aiBusy || g.matchPhase === 'pick_general') return
       const id = Number((btn as HTMLElement).dataset.seat)
-      selectTarget(g, human.id, id)
+      dispatchAction(g, { type: 'select_target', seatId: id })
       void continueAi()
     })
   })
 
   root().querySelector('#end-play')?.addEventListener('click', () => {
     if (app.aiBusy) return
-    endPlayPhase(g, human.id)
+    dispatchAction(g, { type: 'end_play' })
     void continueAi()
   })
 
   root().querySelector('#pass-resp')?.addEventListener('click', () => {
     if (app.aiBusy) return
-    passResponse(g, human.id)
+    dispatchAction(g, { type: 'pass_response' })
     void continueAi()
   })
 
   root().querySelector('#cancel-tgt')?.addEventListener('click', () => {
-    cancelTarget(g, human.id)
+    dispatchAction(g, { type: 'cancel_target' })
     render()
   })
 
@@ -1509,6 +1883,12 @@ function maybeFinish(): void {
               generalId,
             })
           }
+        }
+        if (
+          isTutorialId(found.campaign.id) &&
+          found.stage.index >= found.campaign.stages.length
+        ) {
+          markTutorialCompleted()
         }
         banners.push(...evaluateAchievements())
         app.unlockBanners = banners
