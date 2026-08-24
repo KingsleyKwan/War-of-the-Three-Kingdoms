@@ -1,2 +1,2 @@
 /** placeholder — will overwrite with full */
-export function activateSkill() {}
+export function dealDamage() {}
