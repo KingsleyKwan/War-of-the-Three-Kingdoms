@@ -1363,6 +1363,23 @@ function renderChoicePanel(g: GameSnapshot): string {
 }
 
 function renderGeneralPickPanel(g: GameSnapshot): string {
+  const human = localHuman(g)
+  const actorId = g.prompt.actorId
+  // Wait if another human is picking
+  if (actorId != null && actorId !== human.id) {
+    const who = g.players[actorId]
+    return `<div class="pick-panel">
+    <h3>等待選將</h3>
+    <p class="muted">${who ? escapeHtml(who.name) : '其他玩家'} 正在選擇武將…</p>
+  </div>`
+  }
+  // Already picked — waiting for others
+  if (human.generalId) {
+    return `<div class="pick-panel">
+    <h3>已選定</h3>
+    <p class="muted">你已選【${escapeHtml(getGeneral(human.generalId).name)}】，等待其他玩家選將…</p>
+  </div>`
+  }
   const ids = g.prompt.generalIds ?? []
   const title = ids.length > 3 ? '選擇武將（全部可選）' : '系統隨機三將，請選一'
   return `<div class="pick-panel">
@@ -1747,6 +1764,8 @@ function bindTable(): void {
 
   root().querySelectorAll('[data-pick-gen]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      if (g.prompt.kind !== 'choose_general' || g.prompt.actorId !== human.id) return
+      if (human.generalId) return
       const id = (btn as HTMLElement).dataset.pickGen!
       dispatchAction(g, { type: 'pick_general', generalId: id })
       app.detailHtml = null
