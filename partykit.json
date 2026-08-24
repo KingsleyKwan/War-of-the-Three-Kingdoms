@@ -1,0 +1,5 @@
+{
+  "name": "wtk-multiplayer",
+  "main": "party/room.ts",
+  "compatibilityDate": "2026-01-01"
+}
