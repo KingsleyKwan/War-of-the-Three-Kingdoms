@@ -9,11 +9,14 @@
     "preview": "vite preview",
     "smoke": "bash scripts/smoke-pages-game.sh",
     "test": "tsx --test 'tests/*.test.ts'",
-    "test:skills": "tsx scripts/skill-match-review.ts"
+    "test:skills": "tsx scripts/skill-match-review.ts",
+    "party:dev": "partykit dev",
+    "party:deploy": "partykit deploy"
   },
   "devDependencies": {
     "tsx": "^4.23.12",
     "typescript": "~5.9.0",
-    "vite": "^6.3.0"
+    "vite": "^6.3.0",
+    "partykit": "^0.0.115"
   }
 }
