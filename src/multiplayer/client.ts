@@ -91,3 +91,496 @@ export function createMultiplayerClient(): MultiplayerClient {
   if (PARTY_HOST) return createPartyClient(PARTY_HOST)
   return createPeerClient()
 }
+
+// ---------------------------------------------------------------------------
+// PeerJS transport (default)
+// ---------------------------------------------------------------------------
+
+type WireJoin = { type: 'join'; name: string; clientId: string }
+type WireMsg = ClientMsg | WireJoin
+
+function createPeerClient(): MultiplayerClient {
+  const clientId = localClientId()
+  let handler: RoomEventHandler | null = null
+  let peer: Peer | null = null
+  let isHostMode = false
+  let roleReady = false
+  let room: RoomState | null = null
+  let pendingRoomId = ''
+  /** clientId → connection (host side) */
+  const guestConns = new Map<string, DataConnection>()
+  let hostConn: DataConnection | null = null
+  const outbox: ClientMsg[] = []
+  let destroyed = false
+  /** Serialise role setup so concurrent send() calls wait */
+  let setupChain: Promise<void> = Promise.resolve()
+
+  function emit(msg: ServerMsg): void {
+    if (!destroyed) handler?.(msg)
+  }
+
+  function broadcast(msg: ServerMsg): void {
+    emit(msg)
+    for (const conn of guestConns.values()) {
+      if (conn.open) {
+        try {
+          conn.send(msg)
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+
+  function freeSeatByClientId(cid: string): void {
+    if (!room) return
+    const seat = room.seats.find((s) => s.clientId === cid)
+    if (!seat) return
+    seat.type = 'empty'
+    seat.name = ''
+    seat.clientId = undefined
+    seat.ready = false
+    room = { ...room, seats: [...room.seats] }
+    broadcast({ type: 'room', room })
+  }
+
+  function onGuestConnection(conn: DataConnection): void {
+    conn.on('data', (raw) => {
+      const data = raw as WireMsg
+      if (!data || typeof data !== 'object') return
+
+      if (data.type === 'join') {
+        if (!room || room.status !== 'lobby') {
+          try {
+            conn.send({ type: 'error', message: '無法加入（房間已開局或不存在）' })
+          } catch {
+            /* ignore */
+          }
+          return
+        }
+        const empty = firstEmptySeat(room.seats)
+        if (!empty) {
+          try {
+            conn.send({ type: 'error', message: '房間已滿' })
+          } catch {
+            /* ignore */
+          }
+          return
+        }
+        const join = data as WireJoin
+        const cid = join.clientId || conn.peer
+        empty.type = 'human'
+        empty.name = join.name || '玩家'
+        empty.clientId = cid
+        empty.ready = false
+        guestConns.set(cid, conn)
+        room = { ...room, seats: [...room.seats] }
+        broadcast({ type: 'room', room })
+        return
+      }
+
+      if (data.type === 'action') {
+        const cid =
+          [...guestConns.entries()].find(([, c]) => c === conn)?.[0] ?? conn.peer
+        emit({ type: 'remote_action', clientId: cid, action: data.action })
+        return
+      }
+
+      if (data.type === 'leave') {
+        const cid =
+          [...guestConns.entries()].find(([, c]) => c === conn)?.[0] ?? conn.peer
+        guestConns.delete(cid)
+        freeSeatByClientId(cid)
+        return
+      }
+
+      if (data.type === 'ready' && room) {
+        const cid =
+          [...guestConns.entries()].find(([, c]) => c === conn)?.[0] ?? conn.peer
+        const seat = room.seats.find((s) => s.clientId === cid)
+        if (seat) {
+          seat.ready = !!data.ready
+          room = { ...room, seats: [...room.seats] }
+          broadcast({ type: 'room', room })
+        }
+      }
+    })
+    conn.on('close', () => {
+      const cid =
+        [...guestConns.entries()].find(([, c]) => c === conn)?.[0] ?? conn.peer
+      guestConns.delete(cid)
+      freeSeatByClientId(cid)
+    })
+  }
+
+  function dispatchSend(msg: ClientMsg): void {
+    if (isHostMode) {
+      if (msg.type === 'host_room') {
+        room = msg.room
+        broadcast({ type: 'room', room: msg.room })
+        return
+      }
+      if (msg.type === 'host_match') {
+        if (room) room = { ...room, status: 'playing', match: msg.match }
+        broadcast({ type: 'match', match: msg.match })
+        return
+      }
+      if (msg.type === 'leave') {
+        destroyAll()
+        emit({ type: 'error', message: '已離開房間' })
+        return
+      }
+      return
+    }
+
+    // Guest → host
+    if (!hostConn?.open) return
+    if (msg.type === 'join') {
+      const wire: WireJoin = { type: 'join', name: msg.name, clientId }
+      hostConn.send(wire)
+      return
+    }
+    hostConn.send(msg)
+  }
+
+  function destroyAll(): void {
+    destroyed = true
+    roleReady = false
+    try {
+      hostConn?.close()
+    } catch {
+      /* ignore */
+    }
+    hostConn = null
+    for (const c of guestConns.values()) {
+      try {
+        c.close()
+      } catch {
+        /* ignore */
+      }
+    }
+    guestConns.clear()
+    try {
+      peer?.destroy()
+    } catch {
+      /* ignore */
+    }
+    peer = null
+    room = null
+    pendingRoomId = ''
+    outbox.length = 0
+  }
+
+  function waitPeerOpen(p: Peer): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('Peer 連線逾時（無法連上 PeerJS 雲端）')), 20000)
+      const onOpen = (id: string) => {
+        clearTimeout(t)
+        cleanup()
+        resolve(id)
+      }
+      const onError = (err: unknown) => {
+        clearTimeout(t)
+        cleanup()
+        reject(new Error(peerErrorMessage(err)))
+      }
+      const cleanup = () => {
+        p.off('open', onOpen)
+        p.off('error', onError)
+      }
+      p.on('open', onOpen)
+      p.on('error', onError)
+    })
+  }
+
+  /**
+   * Wait until DataChannel is open. Also rejects on peer-unavailable
+   * (PeerJS often reports that on the Peer object, not the connection).
+   */
+  function waitConnOpen(p: Peer, conn: DataConnection): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let settled = false
+      const t = setTimeout(() => {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(
+          new Error(
+            '無法連上房主（逾時）。請確認：① 房號完全一致 ② 房主畫面仍開著且已顯示房號 ③ 兩邊都有網絡。然後再試一次。',
+          ),
+        )
+      }, 20000)
+
+      const onOpen = () => {
+        if (settled) return
+        settled = true
+        clearTimeout(t)
+        cleanup()
+        resolve()
+      }
+      const onConnError = (err: unknown) => {
+        if (settled) return
+        settled = true
+        clearTimeout(t)
+        cleanup()
+        reject(new Error(peerErrorMessage(err)))
+      }
+      const onPeerError = (err: unknown) => {
+        if (settled) return
+        settled = true
+        clearTimeout(t)
+        cleanup()
+        reject(new Error(peerErrorMessage(err)))
+      }
+      const cleanup = () => {
+        conn.off('open', onOpen)
+        conn.off('error', onConnError)
+        p.off('error', onPeerError)
+      }
+
+      if (conn.open) {
+        onOpen()
+        return
+      }
+      conn.on('open', onOpen)
+      conn.on('error', onConnError)
+      p.on('error', onPeerError)
+    })
+  }
+
+  /** Guest: try connect once, on peer-unavailable wait 1.5s and retry once (host may still be registering). */
+  async function connectAsGuest(pid: string): Promise<void> {
+    peer = new Peer(PEER_OPTS)
+    await waitPeerOpen(peer)
+
+    const tryConnect = (): Promise<DataConnection> => {
+      const conn = peer!.connect(pid, { reliable: true })
+      return waitConnOpen(peer!, conn).then(() => conn)
+    }
+
+    try {
+      hostConn = await tryConnect()
+    } catch (e1) {
+      const msg = e1 instanceof Error ? e1.message : ''
+      // Host may still be registering on the cloud — brief wait + one retry
+      if (/搵唔到房主|unavailable|逾時/i.test(msg)) {
+        await new Promise((r) => setTimeout(r, 1500))
+        try {
+          hostConn = await tryConnect()
+        } catch (e2) {
+          throw e2
+        }
+      } else {
+        throw e1
+      }
+    }
+
+    isHostMode = false
+    hostConn.on('data', (raw) => {
+      try {
+        emit(raw as ServerMsg)
+      } catch {
+        /* ignore */
+      }
+    })
+    hostConn.on('close', () => {
+      emit({ type: 'error', message: '房主已斷線，房間關閉' })
+    })
+    peer.on('error', (err) => {
+      emit({ type: 'error', message: peerErrorMessage(err) })
+    })
+  }
+
+  /** First message decides role: host_room → Host, join → Guest. */
+  async function ensureRole(firstMsg: ClientMsg): Promise<void> {
+    if (roleReady) return
+    if (!pendingRoomId) throw new Error('尚未 connect')
+
+    const pid = peerIdForRoom(pendingRoomId)
+
+    if (firstMsg.type === 'host_room' || firstMsg.type === 'host_match') {
+      peer = new Peer(pid, PEER_OPTS)
+      await waitPeerOpen(peer)
+      isHostMode = true
+      peer.on('connection', onGuestConnection)
+      peer.on('disconnected', () => {
+        // Try to reconnect signaling; if it fails, notify
+        try {
+          peer?.reconnect()
+        } catch {
+          emit({ type: 'error', message: '連線已中斷' })
+        }
+      })
+      peer.on('error', (err) => {
+        emit({ type: 'error', message: peerErrorMessage(err) })
+      })
+      roleReady = true
+      return
+    }
+
+    if (firstMsg.type === 'join') {
+      await connectAsGuest(pid)
+      roleReady = true
+      return
+    }
+
+    // Other messages before role is set — ignore until host_room / join
+  }
+
+  async function processOutbox(): Promise<void> {
+    while (outbox.length) {
+      const msg = outbox[0]!
+      if (!roleReady) {
+        try {
+          await ensureRole(msg)
+        } catch (e) {
+          outbox.shift()
+          emit({
+            type: 'error',
+            message: e instanceof Error ? e.message : '連線失敗',
+          })
+          destroyAll()
+          destroyed = false
+          return
+        }
+      }
+      if (!roleReady) {
+        // Message was not role-setting; wait for host_room / join
+        return
+      }
+      outbox.shift()
+      dispatchSend(msg)
+    }
+  }
+
+  return {
+    clientId,
+    isOnline: true,
+
+    async connect(roomId: string) {
+      destroyed = false
+      pendingRoomId = roomId.trim().toUpperCase()
+      roleReady = false
+      isHostMode = false
+      // Role is established on first send (host_room or join)
+    },
+
+    disconnect() {
+      destroyAll()
+      destroyed = false
+    },
+
+    send(msg: ClientMsg) {
+      outbox.push(msg)
+      setupChain = setupChain.then(() => processOutbox()).catch(() => {})
+    },
+
+    onMessage(h) {
+      handler = h
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PartyKit transport (optional legacy)
+// ---------------------------------------------------------------------------
+
+function createPartyClient(host: string): MultiplayerClient {
+  const clientId = localClientId()
+  let socket: WebSocket | null = null
+  let handler: RoomEventHandler | null = null
+
+  return {
+    clientId,
+    isOnline: true,
+    async connect(id: string) {
+      const url = `wss://${host}/parties/main/${encodeURIComponent(id)}?clientId=${encodeURIComponent(clientId)}`
+      socket = new WebSocket(url)
+      await new Promise<void>((resolve, reject) => {
+        if (!socket) return reject(new Error('no socket'))
+        socket.onopen = () => resolve()
+        socket.onerror = () => reject(new Error('WebSocket failed'))
+      })
+      socket.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(String(ev.data)) as ServerMsg
+          handler?.(msg)
+        } catch {
+          /* ignore */
+        }
+      }
+      socket.onclose = () => {
+        handler?.({ type: 'error', message: '連線已中斷' })
+      }
+    },
+    disconnect() {
+      socket?.close()
+      socket = null
+    },
+    send(msg: ClientMsg) {
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(msg))
+      }
+    },
+    onMessage(h) {
+      handler = h
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Local mock (single tab, offline UI)
+// ---------------------------------------------------------------------------
+
+function createLocalMockClient(): MultiplayerClient {
+  const clientId = localClientId()
+  let handler: RoomEventHandler | null = null
+  let room: RoomState | null = null
+
+  return {
+    clientId,
+    isOnline: false,
+    async connect() {
+      /* local: nothing to connect */
+    },
+    disconnect() {
+      room = null
+    },
+    send(msg: ClientMsg) {
+      if (msg.type === 'join' && room) {
+        const empty = room.seats.find((s) => s.type === 'empty')
+        if (!empty) {
+          handler?.({ type: 'error', message: '房間已滿' })
+          return
+        }
+        empty.type = 'human'
+        empty.name = msg.name || '玩家'
+        empty.clientId = clientId
+        empty.ready = false
+        handler?.({ type: 'room', room: { ...room, seats: [...room.seats] } })
+        return
+      }
+      if (msg.type === 'leave') {
+        room = null
+        handler?.({ type: 'error', message: '已離開房間' })
+        return
+      }
+      if (msg.type === 'host_room') {
+        room = msg.room
+        handler?.({ type: 'room', room: msg.room })
+        return
+      }
+      if (msg.type === 'host_match') {
+        if (room) room = { ...room, status: 'playing', match: msg.match }
+        handler?.({ type: 'match', match: msg.match })
+        return
+      }
+      if (msg.type === 'start' && room) {
+        handler?.({ type: 'room', room: { ...room, status: 'playing' } })
+      }
+    },
+    onMessage(h) {
+      handler = h
+    },
+  }
+}
