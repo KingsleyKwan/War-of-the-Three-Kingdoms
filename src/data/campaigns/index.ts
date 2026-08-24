@@ -2,7 +2,6 @@ import { LIEZHUAN_CAMPAIGNS } from '../liezhuan'
 import { TUTORIAL_CAMPAIGN, TUTORIAL_CAMPAIGN_ID, isTutorialId } from './tutorial'
 import {
   buildFreeMatch,
-  buildMultiplayerMatch,
   buildStageEpilogue,
   buildStageMatch,
   CAOCAO_CAMPAIGN_ID,
@@ -10,6 +9,7 @@ import {
   resolveGeneralId,
   resolveStagePacks,
 } from './caocao'
+import { buildMultiplayerMatch } from './mpMatch'
 import { SHU_CAMPAIGN_ID, SHU_STAGES } from './shu'
 import { WU_CAMPAIGN_ID, WU_STAGES } from './wu'
 import type { CampaignDef, CampaignStage } from './types'
