@@ -880,12 +880,9 @@ export function continueBeginTurn(state: GameSnapshot): void {
   }
 
   if (skipPlay) {
+    // 樂不思蜀／據守等：跳過出牌，但仍須進入棄牌（手牌超過體力上限時）
     log(state, `${p.name} 跳過出牌階段。`)
-    if (skills.includes('biyue')) {
-      draw(state, p.id, 1)
-      log(state, `${p.name} 發動閉月，摸一張牌。`)
-    }
-    advanceTurn(state)
+    finishEndPhase(state, p.id)
     return
   }
 
