@@ -44,14 +44,18 @@ export function distanceMod(p: PlayerState): { minus: number; plus: number } {
   // +1 坐騎（如的盧）：其他角色與你的距離 +1
   if (p.equips.horsePlus) plus++
   if (playerSkills(p).includes('mashu')) minus++
-  minus += Math.min(3, p.tianCount ?? 0)
+  minus += Math.min(5, (p.tianCount ?? 0) + (p.tianCards?.length ?? 0))
   return { minus, plus }
 }
 
 export function playerSkills(p: PlayerState): string[] {
   if (!p.generalId || p.skillsDisabled) return []
   try {
-    return [...new Set([...getGeneral(p.generalId).skills, ...(p.extraSkills ?? [])])]
+    const lordOnly = new Set(['hujia', 'jijiang', 'jiuyuan', 'huangtian'])
+    const raw = [...getGeneral(p.generalId).skills, ...(p.extraSkills ?? [])]
+    const filtered =
+      p.identity === 'lord' ? raw : raw.filter((id) => !lordOnly.has(id))
+    return [...new Set(filtered)]
   } catch {
     return []
   }
@@ -93,6 +97,7 @@ export function withinDistanceOne(
 }
 
 export function handLimit(p: PlayerState): number {
+  if (p.hp <= 0 && (p.buquCards?.length ?? 0) > 0) return p.buquCards!.length
   return Math.max(0, p.hp)
 }
 

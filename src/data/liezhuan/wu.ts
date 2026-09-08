@@ -13,6 +13,11 @@ export const WU_LIEZHUAN = [
       enemies: [{ id: "yanbaihu", name: "山越" }, { id: "soldier", name: "亂軍" }],
       allies: ["zhouyu"],
       next: "赤壁將至。他要在曹操與劉備之間，選一條能活的路。",
+      setup: {
+        player: { handCount: 6, handKinds: ["wuzhong", "sha", "sha"] },
+        allies: { handCount: 3 },
+        enemies: { hp: 2, maxHp: 3 },
+      },
     },
     {
       title: "赤壁決策",

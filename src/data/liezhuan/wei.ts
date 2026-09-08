@@ -13,6 +13,10 @@ export const WEI_LIEZHUAN = [
       enemies: ["zhangjiao", { id: "soldier", name: "黃巾兵" }],
       allies: ["xiahoudun"],
       next: "關東烽火將起，董卓廢立之訊已在路上。",
+      setup: {
+        player: { equipKinds: ["qinggang"], handKinds: ["sha", "sha", "wuzhong"], handCount: 4 },
+        enemies: { hp: 3 },
+      },
     },
     {
       title: "官渡決機",
@@ -90,6 +94,10 @@ export const WEI_LIEZHUAN = [
       lose: "獨眼未立威，濮陽更危。",
       enemies: ["lvbu", { id: "soldier", name: "并州兵" }],
       next: "此後人稱「盲夏侯」，敵聞之色變。",
+      setup: {
+        player: { hp: 2, maxHp: 4, handKinds: ["sha", "tao", "sha"], handCount: 4 },
+        enemies: { equipKinds: ["fangtian"] },
+      },
     },
     {
       title: "淮南拒敵",
@@ -227,6 +235,10 @@ export const WEI_LIEZHUAN = [
       enemies: ["guanyu", { id: "soldier", name: "荊州兵" }],
       packs: ["standard", "wind"],
       survive: 4,
+      setup: {
+        player: { hp: 2, maxHp: 4, equipKinds: ["renwang"], handCount: 5 },
+        enemies: { hp: 4, equipKinds: ["qinglong"] },
+      },
     },
   ]),
   makeLiezhuan("dianwei", "古之惡來・宛城死門", [

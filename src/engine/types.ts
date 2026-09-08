@@ -77,7 +77,19 @@ export interface PlayerState {
   jiuActive?: boolean
   /** 破軍移出遊戲的牌，下回合開始時收回 */
   pojunAside?: CardInstance[]
-  /** 裸衣：本回合殺傷害+1且不能用錦囊 */
+  /** 翻面：回合開始時翻回並跳過整個回合 */
+  facedown?: boolean
+  /** 不屈「創」牌 */
+  buquCards?: CardInstance[]
+  /** 屯田「田」牌 */
+  tianCards?: CardInstance[]
+  /** 化身所變成的武將 */
+  huashenGeneralId?: string
+  /** 黃天主公技：本回合已交給張角 */
+  huangtianUsed?: boolean
+  /** 放權：結束階段棄牌並給額外回合 */
+  fangquanPending?: boolean
+  /** 裸衣：本回合【殺】／【決鬥】傷害+1 */
   luoyiActive?: boolean
   /** 制衡每回合限一次 */
   zhihengUsed?: boolean
@@ -103,7 +115,7 @@ export interface PlayerState {
   zhijiAwakened?: boolean
   hunziAwakened?: boolean
   zaoxianAwakened?: boolean
-  /** 屯田牌（簡化：每張距離-1） */
+  /** 屯田「田」：每張令與其他角色距離 −1 */
   tianCount?: number
   tiaoxinUsed?: boolean
   dimengUsed?: boolean
@@ -280,6 +292,10 @@ export interface GameSnapshot {
     damageCard?: CardInstance
     /** 方天多目標佇列 */
     extraTargets?: number[]
+    xianglePaid?: boolean
+    tieqiAsked?: boolean
+    baguaAsked?: boolean
+    hujiaAsked?: boolean
   }
   /** 火屬性標記（火攻等） */
   _damageNature?: 'normal' | 'fire' | 'thunder'

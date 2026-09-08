@@ -1213,14 +1213,14 @@ function renderTable(): string {
             ? `<button type="button" class="info-btn" data-info-seat="${p.id}" title="詳情" aria-label="詳情">ℹ</button>`
             : ''
           return `<div class="seat-wrap" style="--angle:${angle}deg;--seat-c:${c}" data-visual="${visual}" data-seat-pos="${p.id}">
-            <div class="seat ${p.alive ? '' : 'dead'} ${active ? 'active' : ''} ${p.id === human.id ? 'human' : (p.isHuman ? 'human-remote' : '')} ${targetable ? 'targetable' : ''} ${reach} ${picking && !hasGen ? 'hidden-gen' : ''} ${hurt ? 'hurt' : ''}" data-seat="${p.id}" role="${targetable ? 'button' : 'group'}" tabindex="${targetable ? '0' : '-1'}">
+            <div class="seat ${p.alive ? '' : 'dead'} ${p.facedown ? 'facedown' : ''} ${active ? 'active' : ''} ${p.id === human.id ? 'human' : (p.isHuman ? 'human-remote' : '')} ${targetable ? 'targetable' : ''} ${reach} ${picking && !hasGen ? 'hidden-gen' : ''} ${hurt ? 'hurt' : ''}" data-seat="${p.id}" role="${targetable ? 'button' : 'group'}" tabindex="${targetable ? '0' : '-1'}">
               ${portrait}
               <div class="seat-head">
                 <span class="seat-gen">${gen ? escapeHtml(gen.name) : '未亮將'}</span>
                 ${infoBtn}
               </div>
               <div class="seat-name">${escapeHtml(p.name)}${idText ? `・${idText}` : ''}</div>
-              <div class="hp">${hasGen ? hearts(p.hp, p.maxHp) : '—'}</div>
+              <div class="hp">${hasGen ? hearts(p.hp, p.maxHp) : '—'}${p.buquCards?.length ? ` 創${p.buquCards.length}` : ''}${p.facedown ? ' 翻面' : ''}</div>
               <div class="equip">${hasGen ? equipText(p) : picking ? '等待選將' : '無裝備'}</div>
               <div class="meta-row"><span>手牌 ${picking ? '—' : p.hand.length}</span><span class="dist">距 ${distFromHuman}</span></div>
               ${

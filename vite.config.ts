@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 // GitHub Pages project site: https://kingsleykwan.github.io/War-of-the-Three-Kingdoms/
 // Keep every emitted JS chunk under ~180KB so GitHub Contents / MCP push tools can handle them.
 export default defineConfig({
-  base: '/War-of-the-Three-Kingdoms/',
+  base: process.env.WTK_PAGES === '1' ? '/War-of-the-Three-Kingdoms/' : '/',
   build: {
     outDir: 'docs',
     emptyOutDir: true,
@@ -22,5 +22,9 @@ export default defineConfig({
         },
       },
     },
+  },
+  server: {
+    host: '0.0.0.0',
+    port: 8080,
   },
 })

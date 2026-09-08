@@ -144,7 +144,7 @@ describe('kuanggu', () => {
 })
 
 describe('buqu', () => {
-  it('returns 周泰 to 1 hp when dying with cards left to draw', () => {
+  it('keeps 周泰 alive at 0 hp with a 創 of unique rank', () => {
     const state = forcePlay(duel('zhoutai', 'zhangfei'))
     const zt = state.players[0]
     zt.hp = 1
@@ -153,7 +153,8 @@ describe('buqu', () => {
       resolveChoice(state, state.prompt.actorId ?? 0, 'skip')
     }
     assert.equal(zt.alive, true)
-    assert.equal(zt.hp, 1)
+    assert.equal(zt.hp, 0)
+    assert.ok((zt.buquCards?.length ?? 0) >= 1)
     assert.ok(logged(state, '不屈'))
   })
 })
@@ -176,15 +177,21 @@ describe('niepan', () => {
 })
 
 describe('xingshang', () => {
-  it('lets 曹丕 draw two when the other seat dies', () => {
+  it('lets 曹丕 obtain the dead seat’s cards', () => {
     const state = forcePlay(duel('caopi', 'soldier'))
+    const loot = cardOf('sha')
+    const extra = cardOf('shan')
+    state.players[1].hand = [loot, extra]
+    state.players[1].equips = {}
     const cp = state.players[0]
-    const before = cp.hand.length
     state.players[1].hp = 1
     debugDealDamage(state, 1, 4, 0)
     drainDying(state)
+    if (state.prompt.choiceKey === 'xingshang') {
+      resolveChoice(state, 0, 'take')
+    }
     assert.equal(state.players[1].alive, false)
-    assert.ok(cp.hand.length >= before + 2)
+    assert.ok(cp.hand.some((c) => c.uid === loot.uid))
     assert.ok(logged(state, '行殤'))
   })
 })

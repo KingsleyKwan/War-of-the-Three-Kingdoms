@@ -30,9 +30,6 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
       actions.push({ id: 'rende', label: '仁德', hint: '將手牌交給其他角色，兩張可回1體力' })
     }
   }
-  if (skills.includes('luoyi') && !p.luoyiActive && p.hand.length >= 2) {
-    actions.push({ id: 'luoyi', label: '裸衣', hint: '棄兩張牌：本回合殺／決鬥傷害+1，不能用錦囊' })
-  }
   if (skills.includes('qiangxi') && !p.qiangxiUsed) {
     const range = attackRangeOf(p)
     const foes = enemiesOf(state, playerId).filter(
@@ -106,13 +103,7 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
   if (skills.includes('luanwu') && !p.luanwuUsed) {
     actions.push({ id: 'luanwu', label: '亂武', hint: '其他角色對距離最近者出殺，否則失去1體力' })
   }
-  if (skills.includes('qiaobian') && !p.qiaobianUsed && p.hand.length > 0) {
-    actions.push({ id: 'qiaobian', label: '巧變', hint: '棄一張牌並摸一張牌' })
-  }
-  if (skills.includes('fangquan') && !p.fangquanUsed) {
-    actions.push({ id: 'fangquan', label: '放權', hint: '結束出牌並令一名其他角色摸兩張' })
-  }
-  if (skills.includes('jixi') && (p.tianCount ?? 0) > 0) {
+  if (skills.includes('jixi') && ((p.tianCount ?? 0) > 0 || (p.tianCards?.length ?? 0) > 0)) {
     actions.push({ id: 'jixi', label: '急襲', hint: '消耗一張田，視為使用順手牽羊' })
   }
   if (skills.includes('zhijian')) {
@@ -149,6 +140,36 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
         label: '丈八出殺',
         hint: '將兩張手牌當【殺】使用（本階段限一次，諸葛連弩／咆哮除外）',
       })
+    }
+  }
+  if (skills.includes('jijiang') && mayUseSha(p)) {
+    const helpers = state.players.filter((x) => {
+      if (!x.alive || x.id === playerId || !x.generalId) return false
+      try {
+        const g = getGeneral(x.generalId)
+        return g.kingdom === 'shu' && g.gender === 'male'
+      } catch {
+        return false
+      }
+    })
+    if (helpers.length && enemiesOf(state, playerId).some((tid) => canReach(state, playerId, tid))) {
+      actions.push({ id: 'jijiang', label: '激將', hint: '令其他蜀勢力男性角色替你打出【殺】' })
+    }
+  }
+  if (!p.huangtianUsed && p.generalId) {
+    try {
+      if (getGeneral(p.generalId).kingdom === 'qun') {
+        const zj = state.players.find((x) => x.alive && playerSkills(x).includes('huangtian'))
+        const gift = p.hand.filter((c) => {
+          const k = getCardDef(c.defId).kind
+          return k === 'shan' || k === 'shandian'
+        })
+        if (zj && gift.length) {
+          actions.push({ id: 'huangtian', label: '黃天', hint: '交給張角一張【閃】或【閃電】' })
+        }
+      }
+    } catch {
+      /* ignore */
     }
   }
   return actions

@@ -14,7 +14,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['shensu'],
     pack: 'wind',
-    skillText: '神速：可跳過判定與摸牌階段，視為對一名角色使用【殺】（無距離限制）。',
+    skillText: '神速：可選擇一至兩項：跳過判定與摸牌；跳過出牌階段並棄一張牌。每選擇一項，視為使用一張無距離限制的【殺】。',
   },
   {
     id: 'caoren',
@@ -24,7 +24,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['jushou'],
     pack: 'wind',
-    skillText: '據守：出牌階段結束時可摸三張牌，然後跳過下回合出牌階段。',
+    skillText: '據守：結束階段可摸三張牌，然後將武將牌翻面。',
   },
   {
     id: 'huangzhong',
@@ -64,7 +64,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['buqu'],
     pack: 'wind',
-    skillText: '不屈（簡化）：瀕死時若能摸一張且手牌不空，則回至1體力。',
+    skillText: '不屈：瀕死時將牌堆頂牌置為「創」；若點數與已有「創」均不同則不死亡（體力保持 0，手牌上限為創數）。',
   },
   {
     id: 'yuji',
@@ -167,7 +167,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['xingshang', 'fangzhu'],
     pack: 'forest',
-    skillText: '行殤：其他角色死亡時摸兩張牌。放逐：受傷後令另一角色摸已損失體力數的牌並跳過下回合出牌階段。',
+    skillText: '行殤：其他角色死亡時，可獲得其所有牌。放逐：受傷後令另一角色摸已損失體力數的牌並將其武將牌翻面。',
   },
   {
     id: 'menghuo',
@@ -187,7 +187,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'female',
     skills: ['juxiang', 'lieren'],
     pack: 'forest',
-    skillText: '巨象：免疫南蠻，結算後摸一張。烈刃：【殺】造成傷害後拼點，勝則獲得目標一張手牌。',
+    skillText: '巨象：免疫南蠻；南蠻結算後你獲得之。烈刃：【殺】造成傷害後拼點，勝則獲得目標一張手牌。',
   },
   {
     id: 'sunjian',
@@ -228,7 +228,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['qiaobian'],
     pack: 'mountain',
-    skillText: '巧變：棄一張牌並摸一張牌（出牌階段限一次）。',
+    skillText: '巧變：棄一張手牌可跳過一個階段（判定／摸牌／出牌／棄牌）。',
   },
   {
     id: 'dengai',
@@ -238,7 +238,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['tuntian', 'zaoxian'],
     pack: 'mountain',
-    skillText: '屯田：回合外失去手牌時獲得「田」並縮短距離。鑿險：三張田時覺醒並獲得【急襲】。',
+    skillText: '屯田：回合外失去牌時判定，非紅桃則置為「田」並縮短距離。鑿險：三張田時覺醒並獲得【急襲】。',
   },
   {
     id: 'jiangwei',
@@ -258,7 +258,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['xiangle', 'fangquan'],
     pack: 'mountain',
-    skillText: '享樂：殺你的角色須額外棄一張基本牌。放權：結束出牌並令另一角色摸兩張。',
+    skillText: '享樂：殺你的角色須額外棄一張基本牌。放權：可跳過出牌階段，結束階段棄一張手牌令一名其他角色獲得一個額外回合。',
   },
   {
     id: 'sunce',
@@ -278,7 +278,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['zhijian', 'guzheng'],
     pack: 'mountain',
-    skillText: '直諫：將手牌中的裝備置入另一角色裝備區並摸一張。固政：其他角色棄牌階段結束時摸一張。',
+    skillText: '直諫：將手牌中的裝備置入另一角色裝備區並摸一張。固政：其他角色棄牌階段結束時，可將其中一張交還該角色並獲得其餘棄牌。',
   },
   {
     id: 'zuoci',
@@ -288,7 +288,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['huashen', 'xinsheng'],
     pack: 'mountain',
-    skillText: '化身：首次行動時隨機獲得一項已實作技能。新生：受傷後重新隨機化身。',
+    skillText: '化身：準備階段變為牌堆中一名未上場武將並獲得其技能。新生：受傷後重新化身。',
   },
   {
     id: 'caiwenji',

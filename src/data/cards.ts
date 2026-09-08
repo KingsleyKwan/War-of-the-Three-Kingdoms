@@ -63,6 +63,9 @@ const SPECS: Spec[] = [
   ...spread('lebu', '樂不思蜀', 'trick', 'standard', [
     ['spade', 6], ['club', 6], ['heart', 6],
   ]),
+  ...spread('shandian', '閃電', 'trick', 'standard', [
+    ['spade', 1], ['heart', 12],
+  ]),
   // —— 裝備 ——
   eq('zhuge', '諸葛連弩', 'weapon', 'standard', 'diamond', 1, 1),
   eq('cixiong', '雌雄雙股劍', 'weapon', 'standard', 'spade', 2, 2),
@@ -102,9 +105,6 @@ const SPECS: Spec[] = [
   ]),
   ...spread('jiu', '酒', 'basic', 'ex', [
     ['spade', 3], ['spade', 9], ['club', 3], ['club', 9], ['diamond', 9],
-  ]),
-  ...spread('shandian', '閃電', 'trick', 'ex', [
-    ['spade', 1], ['heart', 1],
   ]),
   eq('hanbing', '寒冰劍', 'weapon', 'ex', 'spade', 2, 2),
   eq('guding', '古錠刀', 'weapon', 'ex', 'spade', 1, 2),

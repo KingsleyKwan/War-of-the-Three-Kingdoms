@@ -18,7 +18,7 @@ export const PACK_DEFS: PackDef[] = [
   {
     id: 'standard',
     name: '標準包',
-    hint: '基礎牌組與經典武將',
+    hint: '基礎牌組、經典武將與【閃電】',
     alwaysOn: true,
     hasCards: true,
     hasGenerals: true,
@@ -26,7 +26,7 @@ export const PACK_DEFS: PackDef[] = [
   {
     id: 'ex',
     name: '軍爭',
-    hint: '火攻、鐵索連環、火殺、雷殺、酒、閃電、藤甲、朱雀羽扇等',
+    hint: '火攻、鐵索連環、火殺、雷殺、酒、兵糧、藤甲、朱雀羽扇等',
     hasCards: true,
     hasGenerals: false,
   },

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
   activateSkill,
+  extraOf,
   playableCards,
   resolveChoice,
   selectCard,
@@ -72,19 +73,17 @@ describe('rende', () => {
 })
 
 describe('luoyi', () => {
-  it('discards two cards, flags the turn, and blocks tricks', () => {
-    const state = forcePlay(duel('xuchu', 'caocao'))
+  it('asks at the draw phase to draw one fewer and flags the turn', () => {
+    const state = duel('xuchu', 'caocao')
     const p = state.players[0]
-    const a = cardOf('sha')
-    const b = cardOf('shan')
-    const trick = cardOf('wuzhong')
-    p.hand = [a, b, trick]
-    forcePlay(state, 0)
-    pickSkillCards(state, 0, 'luoyi', [a.uid, b.uid])
+    // Opening turn should stop at the 裸衣 prompt
+    assert.equal(state.prompt.choiceKey, 'luoyi')
+    const before = p.hand.length
+    resolveChoice(state, 0, 'yes')
     assert.equal(p.luoyiActive, true)
     assert.ok(logged(state, '裸衣'))
-    assert.ok(!playableCards(state, 0).some((c) => c.uid === trick.uid))
-    assert.ok(!actionIds(state).includes('luoyi'))
+    assert.equal(p.hand.length, before + 1)
+    assert.equal(state.phase, 'play')
   })
 })
 
@@ -123,15 +122,24 @@ describe('jieyin', () => {
 })
 
 describe('qiaobian', () => {
-  it('discards one and draws one', () => {
+  it('skips a phase after discarding a hand card', () => {
     const state = forcePlay(duel('zhanghe', 'caocao'))
     const pay = cardOf('sha')
-    state.players[0].hand = [pay]
-    forcePlay(state, 0)
-    const before = state.players[0].hand.length
-    pickSkillCards(state, 0, 'qiaobian', [pay.uid])
-    assert.equal(state.players[0].qiaobianUsed, true)
-    assert.equal(state.players[0].hand.length, before)
+    state.players[0].hand = [pay, cardOf('shan')]
+    extraOf(state)._qiaobianPhase = 'discard'
+    state.prompt = {
+      kind: 'choice',
+      message: '【巧變】棄一張手牌，跳過棄牌階段？',
+      actorId: 0,
+      choiceKey: 'qiaobian_phase',
+      cardUids: state.players[0].hand.map((c) => c.uid),
+      choices: [
+        { id: pay.uid, label: '棄殺' },
+        { id: 'skip', label: '不發動' },
+      ],
+    }
+    resolveChoice(state, 0, pay.uid)
+    assert.ok(!state.players[0].hand.some((c) => c.uid === pay.uid))
     assert.ok(logged(state, '巧變'))
   })
 })

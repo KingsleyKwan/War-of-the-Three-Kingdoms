@@ -13,6 +13,11 @@ export const SHU_LIEZHUAN = [
       enemies: [{ id: "soldier", name: "黃巾" }, { id: "soldier", name: "黃巾" }],
       allies: ["guanyu", "zhangfei"],
       next: "此後顛沛半生，桃園二字始終未冷。",
+      setup: {
+        player: { handKinds: ["tao", "tao", "sha"], handCount: 5 },
+        allies: { handCount: 3 },
+        enemies: { hp: 2, maxHp: 3 },
+      },
     },
     {
       title: "三讓徐州",
@@ -62,6 +67,10 @@ export const SHU_LIEZHUAN = [
       enemies: ["huaxiong", { id: "soldier", name: "西涼騎" }],
       kill: "huaxiong",
       next: "此後刀名青龍，人稱武聖。",
+      setup: {
+        player: { equipKinds: ["qinglong"], handKinds: ["sha", "sha", "juedou"], handCount: 4 },
+        enemies: { hp: 2, maxHp: 4 },
+      },
     },
     {
       title: "過五關",

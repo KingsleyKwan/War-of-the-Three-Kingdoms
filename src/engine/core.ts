@@ -3,7 +3,9 @@
  * No turn/skill flow — safe for any engine module to import.
  */
 import type { CardInstance, GameSnapshot, PlayerState, Suit } from './types'
-import { playerSkills, removeHand as removeHandCard, shuffle } from './helpers'
+import { effectiveSuit, playerSkills, removeHand as removeHandCard, shuffle } from './helpers'
+
+export { shuffle }
 import { SKILL_CATALOG } from './skillCatalog'
 
 let uidSeq = 1
@@ -88,6 +90,20 @@ export type TurnSkip = {
   yinghunAsked?: boolean
   xiansiAsked?: boolean
   shensuVirtual?: boolean
+  shensuSkipPlay?: boolean
+  luoyiAsked?: boolean
+  luoyiOn?: boolean
+  luoshenAsked?: boolean
+  qiaobianJudge?: boolean
+  qiaobianDraw?: boolean
+  qiaobianPlay?: boolean
+  qiaobianDiscard?: boolean
+  judgesStarted?: boolean
+  jushouAsked?: boolean
+  guzhengAsked?: boolean
+  fangquanAsked?: boolean
+  haoshiAsked?: boolean
+  haoshiOn?: boolean
 }
 
 export function turnSkipOf(state: GameSnapshot): TurnSkip {
@@ -120,8 +136,22 @@ export function takeHand(state: GameSnapshot, playerId: number, uid: string): Ca
   const before = p.hand.length
   const card = removeHandCard(p, uid)
   if (card && state.currentPlayer !== playerId && playerSkills(p).includes('tuntian')) {
-    p.tianCount = (p.tianCount ?? 0) + 1
-    log(state, `${p.name} 發動屯田，獲得一張「田」（共 ${p.tianCount} 張）。`)
+    if (state.deck.length === 0 && state.discard.length) {
+      state.deck = shuffle(state.discard)
+      state.discard = []
+    }
+    const judged = state.deck.pop()
+    if (judged) {
+      const suit = effectiveSuit(judged, p)
+      if (suit !== 'heart') {
+        p.tianCards = [...(p.tianCards ?? []), judged]
+        p.tianCount = (p.tianCount ?? 0) + 1
+        log(state, `${p.name} 發動屯田，判定非紅桃，獲得一張「田」（共 ${p.tianCount} 張）。`)
+      } else {
+        state.discard.push(judged)
+        log(state, `${p.name} 發動屯田，判定為紅桃，未獲得田。`)
+      }
+    }
   }
   if (card && before === 1 && playerSkills(p).includes('lianying')) {
     draw(state, playerId, 1)

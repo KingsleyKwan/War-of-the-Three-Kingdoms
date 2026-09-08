@@ -12,6 +12,10 @@ export const QUN_LIEZHUAN = [
       lose: "途中遇劫。青囊若失，活人的路斷一條。",
       enemies: [{ id: "soldier", name: "山賊" }, { id: "soldier", name: "亂兵" }],
       next: "曹操的頭風，將要他的命。",
+      setup: {
+        player: { handKinds: ["tao", "tao", "wuzhong"], handCount: 5 },
+        enemies: { hp: 2, maxHp: 3 },
+      },
     },
     {
       title: "刮骨與頭風",

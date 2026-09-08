@@ -8,9 +8,9 @@ export const GENERALS: GeneralDef[] = [
     kingdom: 'wei',
     maxHp: 4,
     gender: 'male',
-    skills: ['jianxiong'],
+    skills: ['jianxiong', 'hujia'],
     pack: 'standard',
-    skillText: '奸雄：受到傷害後，可獲得造成傷害的牌。',
+    skillText: '奸雄：受到傷害後，可獲得造成傷害的牌。護駕（主公技）：需要【閃】時可令其他魏勢力角色替你打出【閃】。',
   },
   {
     id: 'simayi',
@@ -50,7 +50,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['luoyi'],
     pack: 'standard',
-    skillText: '裸衣：棄兩張牌，本回合你使用的【殺】或【決鬥】傷害+1且不能使用錦囊。',
+    skillText: '裸衣：摸牌階段可少摸一張牌，若如此，本回合你使用的【殺】或【決鬥】傷害+1。',
   },
   {
     id: 'guojia',
@@ -60,7 +60,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['tiandu', 'yiji'],
     pack: 'standard',
-    skillText: '天妒：判定牌生效後可獲得之。遺計：每受到1點傷害後摸兩張牌。',
+    skillText: '天妒：判定牌生效後可獲得之。遺計：每受到1點傷害後摸兩張牌，然後可將其中任意張交給其他角色。',
   },
   {
     id: 'zhenji',
@@ -78,9 +78,9 @@ export const GENERALS: GeneralDef[] = [
     kingdom: 'shu',
     maxHp: 4,
     gender: 'male',
-    skills: ['rende'],
+    skills: ['rende', 'jijiang'],
     pack: 'standard',
-    skillText: '仁德：出牌階段可將手牌交給其他角色；本回合交出兩張或以上時回1體力。',
+    skillText: '仁德：出牌階段可將手牌交給其他角色；本回合交出兩張或以上時回1體力。激將（主公技）：需要【殺】時可令其他蜀勢力男性角色替你打出【殺】。',
   },
   {
     id: 'guanyu',
@@ -90,7 +90,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['wusheng'],
     pack: 'standard',
-    skillText: '武聖（簡化：紅色手牌可當殺）。',
+    skillText: '武聖：紅色牌可當【殺】使用或打出。',
   },
   {
     id: 'zhangfei',
@@ -120,7 +120,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['longdan'],
     pack: 'standard',
-    skillText: '龍膽（簡化：殺可當閃，閃可當殺）。',
+    skillText: '龍膽：【殺】可當【閃】，【閃】可當【殺】使用或打出。',
   },
   {
     id: 'machao',
@@ -148,9 +148,9 @@ export const GENERALS: GeneralDef[] = [
     kingdom: 'wu',
     maxHp: 4,
     gender: 'male',
-    skills: ['zhiheng'],
+    skills: ['zhiheng', 'jiuyuan'],
     pack: 'standard',
-    skillText: '制衡：出牌階段限一次，棄任意張牌摸等量的牌。',
+    skillText: '制衡：出牌階段限一次，棄任意張牌摸等量的牌。救援（主公技）：吳勢力角色對你使用的【桃】額外回覆1點體力。',
   },
   {
     id: 'ganning',
@@ -160,7 +160,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['qixi'],
     pack: 'standard',
-    skillText: '奇襲（簡化：黑色牌可當過河拆橋）。',
+    skillText: '奇襲：黑色牌可當【過河拆橋】使用。',
   },
   {
     id: 'lvmeng',
@@ -258,10 +258,10 @@ export const GENERALS: GeneralDef[] = [
     kingdom: 'qun',
     maxHp: 3,
     gender: 'male',
-    skills: ['leiji', 'guidao'],
+    skills: ['leiji', 'guidao', 'huangtian'],
     pack: 'standard',
     skillText:
-      '雷擊：使用閃後可令一名角色判定，黑色則受到2點雷電傷害。鬼道：判定時可用黑色手牌替換判定牌。',
+      '雷擊：使用閃後可令一名角色判定，黑色則受到2點雷電傷害。鬼道：判定時可用黑色手牌替換判定牌並獲得原判定牌。黃天（主公技）：其他群勢力角色出牌階段可交給你一張【閃】或【閃電】。',
   },
   {
     id: 'huaxiong',

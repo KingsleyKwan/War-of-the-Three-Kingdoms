@@ -64,12 +64,41 @@ import {
 } from './core'
 import { resolveChoice } from './choice'
 import { askShan, findRecentShaDef, responseCards, handleResponse, passResponse, finishShaHit, applyShaDamage, continueShaQueue, onShaDodged, pindian } from './sha'
-import { dealDamage, debugDealDamage, trySave, getDying, clearDying, getPendingDying, clearPendingDying, saveCardsFor, startDyingIfPending, beginDying, continueDyingAsk, tryBuquThenDeath, finalizeDeath } from './damage'
+import { dealDamage, debugDealDamage, trySave, getDying, clearDying, getPendingDying, clearPendingDying, saveCardsFor, startDyingIfPending, beginDying, continueDyingAsk, tryBuquThenDeath, finalizeDeath, takeDeathLoot, finishGanglie } from './damage'
 import { activateSkill, handleSkillCardPick, confirmSkillCards, finishRende, finishZhangba } from './skills-runtime'
 export { activateSkill, handleSkillCardPick, confirmSkillCards, finishRende, finishZhangba } from './skills-runtime'
-export { dealDamage, debugDealDamage, trySave, getDying, clearDying, getPendingDying, clearPendingDying, saveCardsFor, startDyingIfPending, beginDying, continueDyingAsk, tryBuquThenDeath, finalizeDeath } from './damage'
+export { dealDamage, debugDealDamage, trySave, getDying, clearDying, getPendingDying, clearPendingDying, saveCardsFor, startDyingIfPending, beginDying, continueDyingAsk, tryBuquThenDeath, finalizeDeath, takeDeathLoot, finishGanglie } from './damage'
 export { askShan, findRecentShaDef, responseCards, handleResponse, passResponse, finishShaHit, applyShaDamage, continueShaQueue, onShaDodged, pindian } from './sha'
 export { resolveChoice } from './choice'
+import {
+  applyHuashen,
+  extraOf,
+  nextDelayedTrick,
+  peachHealAmount,
+  popExtraTurn,
+  seedHuashenPile,
+  startDelayedJudges,
+  takeDiscardPhaseCards,
+  trackDiscard,
+  tryJudgeReplace,
+  enqueueExtraTurn,
+  identityKillReward,
+  trimBuquOnHeal,
+  type JudgeResume,
+} from './official'
+export {
+  applyHuashen,
+  extraOf,
+  tryJudgeReplace,
+  commitReplace,
+  enqueueExtraTurn,
+  identityKillReward,
+  peachHealAmount,
+  kingdomOf,
+  seedHuashenPile,
+  trimBuquOnHeal,
+} from './official'
+import { ensureJudgeQueue, runNextDelayedJudge, startLuoshen } from './judges'
 
 // Re-export core primitives used by UI/AI
 export { clearPlayFx, setPlayFx } from './core'
@@ -168,6 +197,7 @@ export function createMatch(config: MatchConfig): GameSnapshot {
     draw(state, pl.id, 4)
   }
   applyBoardSetup(state)
+  seedHuashenPile(state)
   log(state, '發牌完成，戰斗開始。')
   beginTurn(state)
   return state
@@ -322,6 +352,7 @@ export function confirmGeneralPick(
   for (const pl of state.players) {
     draw(state, pl.id, 4)
   }
+  seedHuashenPile(state)
   log(state, '發牌完成，戰斗開始。')
   beginTurn(state)
 }
@@ -370,6 +401,12 @@ export function beginTurn(state: GameSnapshot): void {
     advanceTurn(state)
     return
   }
+  if (p.facedown) {
+    p.facedown = false
+    log(state, `${p.name} 將武將牌翻回正面，跳過本回合。`)
+    advanceTurn(state)
+    return
+  }
   p.shaUsedThisTurn = false
   p.shaPlayedThisTurn = false
   p.jiuUsedThisTurn = false
@@ -393,6 +430,7 @@ export function beginTurn(state: GameSnapshot): void {
   p.tianyiLose = false
   p.quhuUsed = false
   p.ganluUsed = false
+  p.huangtianUsed = false
   p.rendeCount = 0
   if (p.pojunAside?.length) {
     p.hand.push(...p.pojunAside)
@@ -408,9 +446,8 @@ export function beginTurn(state: GameSnapshot): void {
 
   const skills = playerSkills(p)
 
-  if (skills.includes('huashen') && !(p.extraSkills?.length)) {
-    p.extraSkills = [pickHuashenSkill()]
-    log(state, `${p.name} 發動化身，獲得【${skillLabel(p.extraSkills[0])}】。`)
+  if (skills.includes('huashen')) {
+    applyHuashen(state, p)
   }
 
   if (skills.includes('zaoxian') && !p.zaoxianAwakened && (p.tianCount ?? 0) >= 3) {
@@ -556,6 +593,12 @@ export function runPrepareSkills(state: GameSnapshot): void {
     }
   }
 
+  // 洛神：準備階段判定黑色則獲得，可重複至紅色
+  if (skills.includes('luoshen') && !turn.luoshenAsked) {
+    turn.luoshenAsked = true
+    if (startLuoshen(state)) return
+  }
+
   continueBeginTurn(state)
 }
 
@@ -589,7 +632,7 @@ export function applyJudgeReplaceSync(
   judged: CardInstance | null,
   prefer?: JudgePrefer,
 ): CardInstance | null {
-  if (!judged || !prefer) return judged
+  if (!judged) return judged
   const n = state.players.length
   for (let i = 0; i < n; i++) {
     const seat = (state.currentPlayer + i) % n
@@ -603,12 +646,15 @@ export function applyJudgeReplaceSync(
     const cand = pl.hand.find((c) => {
       const s = effectiveSuit(c, pl)
       const red = s === 'heart' || s === 'diamond'
-      let match = false
-      if (prefer === 'red') match = red
-      else if (prefer === 'black') match = !red
-      else if (prefer === 'heart') match = s === 'heart'
-      else if (prefer === 'club') match = s === 'club'
-      else if (prefer === 'nonheart') match = s !== 'heart'
+      let match = true
+      if (prefer) {
+        match = false
+        if (prefer === 'red') match = red
+        else if (prefer === 'black') match = !red
+        else if (prefer === 'heart') match = s === 'heart'
+        else if (prefer === 'club') match = s === 'club'
+        else if (prefer === 'nonheart') match = s !== 'heart'
+      }
       if (!match) return false
       if (hasGuicai) return true
       return hasGuidao && isBlackCard(c)
@@ -616,11 +662,19 @@ export function applyJudgeReplaceSync(
     if (!cand) continue
     const skillName = hasGuicai ? '鬼才' : '鬼道'
     const rep = takeHand(state, seat, cand.uid)!
-    discardCard(state, judged)
-    log(
-      state,
-      `${pl.name} 發動${skillName}，用【${getCardDef(rep.defId).name}】替換判定牌。`,
-    )
+    if (hasGuidao && !hasGuicai) {
+      pl.hand.push(judged)
+      log(
+        state,
+        `${pl.name} 發動鬼道，用【${getCardDef(rep.defId).name}】替換並獲得原判定牌。`,
+      )
+    } else {
+      discardCard(state, judged)
+      log(
+        state,
+        `${pl.name} 發動${skillName}，用【${getCardDef(rep.defId).name}】替換判定牌。`,
+      )
+    }
     return rep
   }
   return judged
@@ -656,14 +710,22 @@ export function continueBeginTurn(state: GameSnapshot): void {
 
   if (skills.includes('shensu') && !turn.shensuAsked) {
     turn.shensuAsked = true
+    const canDiscard =
+      p.hand.length > 0 || equipSlots().some((s) => !!p.equips[s])
     state.prompt = {
       kind: 'choice',
-      message: '【神速】是否跳過判定與摸牌階段，視為使用一張無距離限制的【殺】？',
+      message: '【神速】可選擇一至兩項',
       actorId: p.id,
       choiceKey: 'shensu',
       choices: [
-        { id: 'shensu_skip', label: '發動神速' },
-        { id: 'shensu_normal', label: '正常進行' },
+        { id: 'shensu_skip', label: '選項一：跳過判定與摸牌，視為使用無距離【殺】' },
+        ...(canDiscard
+          ? [
+              { id: 'shensu_discard', label: '選項二：跳過出牌並棄一張牌，視為使用無距離【殺】' },
+              { id: 'shensu_both', label: '兩項都選（兩張無距離【殺】）' },
+            ]
+          : []),
+        { id: 'shensu_normal', label: '不發動' },
       ],
     }
     return
@@ -683,117 +745,86 @@ export function continueBeginTurn(state: GameSnapshot): void {
     return
   }
 
-  // 判定階段：樂不思蜀／兵糧寸斷／閃電
+  // 判定階段：樂不思蜀／兵糧寸斷／閃電（後放置的先判定）
   state.phase = 'judge'
   let skipDraw = turn.skipDraw
   let skipPlay = turn.skipPlay
   if (!turn.skipJudge) {
-  const pendingJudges = [...(p.judges ?? [])]
-  for (const jCard of pendingJudges) {
-    if (!p.judges?.some((x) => x.uid === jCard.uid)) continue
-    p.judges = p.judges.filter((x) => x.uid !== jCard.uid)
-    const jdef = getCardDef(jCard.defId)
-    let judged = drawJudgeCard(state, shuffle)
-    const preferJudge: JudgePrefer | undefined =
-      jdef.kind === 'lebu'
-        ? 'heart'
-        : jdef.kind === 'bingliang'
-          ? 'club'
-          : jdef.kind === 'shandian'
-            ? undefined
-            : undefined
-    judged = applyJudgeReplaceSync(state, judged, preferJudge)
-    let suit = judged ? effectiveSuit(judged, p) : null
-    if (judged) {
-      discardCard(state, judged)
-      log(
-        state,
-        `${p.name} 的【${jdef.name}】判定：${getCardDef(judged.defId).name}`,
-      )
-      if (skills.includes('tiandu')) {
-        p.hand.push(judged)
-        state.discard.pop()
-        log(state, `${p.name} 發動天妒，獲得判定牌。`)
+    if (skills.includes('qiaobian') && !turn.qiaobianJudge && p.hand.length > 0) {
+      turn.qiaobianJudge = true
+      state.prompt = {
+        kind: 'choice',
+        message: '【巧變】棄一張手牌，跳過判定階段？',
+        actorId: p.id,
+        choiceKey: 'qiaobian_phase',
+        cardUids: p.hand.map((c) => c.uid),
+        choices: [
+          ...p.hand.map((c) => ({
+            id: c.uid,
+            label: `棄【${getCardDef(c.defId).name}】並跳過判定`,
+          })),
+          { id: 'skip', label: '不發動' },
+        ],
       }
+      extraOf(state)._qiaobianPhase = 'judge'
+      return
     }
-    if (jdef.kind === 'lebu') {
-      discardCard(state, jCard)
-      if (suit === 'heart') {
-        log(state, `【樂不思蜀】判定為紅桃，無效。`)
-      } else {
-        skipPlay = true
-        log(state, `【樂不思蜀】生效，${p.name} 本回合跳過出牌階段。`)
-      }
-    } else if (jdef.kind === 'bingliang') {
-      discardCard(state, jCard)
-      if (suit === 'club') {
-        log(state, `【兵糧寸斷】判定為梅花，無效。`)
-      } else {
-        skipDraw = true
-        log(state, `【兵糧寸斷】生效，${p.name} 本回合跳過摸牌階段。`)
-      }
-    } else if (jdef.kind === 'shandian') {
-      const rank = judged ? (getCardDef(judged.defId).rank ?? 0) : 0
-      const hit = suit === 'spade' && rank >= 2 && rank <= 9
-      if (hit) {
-        discardCard(state, jCard)
-        log(state, `【閃電】擊中 ${p.name}，造成 3 點雷電傷害。`)
-        ;(state as GameSnapshot & { _resumeBeginTurn?: boolean })._resumeBeginTurn = true
-        if (dealDamage(state, p.id, 3, null, 'thunder', jCard)) return
-        delete (state as GameSnapshot & { _resumeBeginTurn?: boolean })._resumeBeginTurn
-      } else {
-        log(state, `【閃電】未擊中，移至下家判定區。`)
-        const n = state.players.length
-        let passed = false
-        for (let step = 1; step < n; step++) {
-          const nid = (p.id + step) % n
-          const np = state.players[nid]
-          if (!np.alive) continue
-          if ((np.judges ?? []).some((j) => getCardDef(j.defId).kind === 'shandian')) continue
-          np.judges = [...(np.judges ?? []), jCard]
-          log(state, `【閃電】進入 ${np.name} 的判定區。`)
-          passed = true
-          break
-        }
-        if (!passed) {
-          p.judges = [...(p.judges ?? []), jCard]
-        }
-      }
-    } else {
-      discardCard(state, jCard)
-    }
-  }
+    ensureJudgeQueue(state, p.id)
+    if (runNextDelayedJudge(state)) return
+    skipDraw = turnSkipOf(state).skipDraw
+    skipPlay = turnSkipOf(state).skipPlay
   } else {
     log(state, `${p.name} 跳過判定階段。`)
   }
 
-  // 洛神
-  if (skills.includes('luoshen')) {
-    for (let i = 0; i < 8; i++) {
-      let judged = drawJudgeCard(state, shuffle)
-      judged = applyJudgeReplaceSync(state, judged, 'black')
-      if (!judged) break
-      const def = getCardDef(judged.defId)
-      const black = isBlackFor(p, judged)
-      log(
-        state,
-        `${p.name} 洛神判定：${def.name}${black ? '（黑色，獲得）' : '（紅色，結束）'}`,
-      )
-      if (black) {
-        p.hand.push(judged)
-      } else {
-        discardCard(state, judged)
-        if (skills.includes('tiandu')) {
-          p.hand.push(judged)
-          state.discard.pop()
-          log(state, `${p.name} 發動天妒，獲得判定牌。`)
-        }
-        break
-      }
-    }
-  }
-
   state.phase = 'draw'
+  if (!skipDraw && skills.includes('qiaobian') && !turn.qiaobianDraw && p.hand.length > 0) {
+    turn.qiaobianDraw = true
+    state.prompt = {
+      kind: 'choice',
+      message: '【巧變】棄一張手牌，跳過摸牌階段（然後可獲得至多兩名角色各一張手牌）？',
+      actorId: p.id,
+      choiceKey: 'qiaobian_phase',
+      cardUids: p.hand.map((c) => c.uid),
+      choices: [
+        ...p.hand.map((c) => ({
+          id: c.uid,
+          label: `棄【${getCardDef(c.defId).name}】並跳過摸牌`,
+        })),
+        { id: 'skip', label: '不發動' },
+      ],
+    }
+    extraOf(state)._qiaobianPhase = 'draw'
+    return
+  }
+  if (!skipDraw && skills.includes('luoyi') && !turn.luoyiAsked) {
+    turn.luoyiAsked = true
+    state.prompt = {
+      kind: 'choice',
+      message: '【裸衣】是否少摸一張牌，令本回合【殺】／【決鬥】傷害+1？',
+      actorId: p.id,
+      choiceKey: 'luoyi',
+      choices: [
+        { id: 'yes', label: '少摸一張（裸衣）' },
+        { id: 'no', label: '正常摸牌' },
+      ],
+    }
+    return
+  }
+  if (!skipDraw && skills.includes('haoshi') && !turn.haoshiAsked) {
+    turn.haoshiAsked = true
+    state.prompt = {
+      kind: 'choice',
+      message: '【好施】是否額外摸兩張牌？若因此手牌多於 5 張，須將一半交給手牌最少的角色。',
+      actorId: p.id,
+      choiceKey: 'haoshi',
+      choices: [
+        { id: 'yes', label: '多摸兩張（好施）' },
+        { id: 'no', label: '正常摸牌' },
+      ],
+    }
+    return
+  }
   if (!skipDraw && skills.includes('tuxi') && !turn.tuxiAsked) {
     const victims = state.players.filter((o) => o.alive && o.id !== p.id && o.hand.length > 0)
     if (victims.length) {
@@ -843,11 +874,15 @@ export function continueBeginTurn(state: GameSnapshot): void {
     } else {
       let drawN = 2
       if (playerSkills(p).includes('yingzi')) drawN++
-      if (skills.includes('haoshi')) drawN += 2
+      if (turn.haoshiOn) drawN += 2
+      if (turn.luoyiOn) {
+        drawN = Math.max(0, drawN - 1)
+        p.luoyiActive = true
+      }
       draw(state, p.id, drawN)
-      log(state, `${p.name} 摸了 ${drawN} 張牌。`)
+      log(state, `${p.name} 摸了 ${drawN} 張牌${turn.luoyiOn ? '（裸衣少摸）' : ''}${turn.haoshiOn ? '（好施）' : ''}。`)
     }
-    if (skills.includes('haoshi') && p.hand.length > 5) {
+    if (turn.haoshiOn && p.hand.length > 5) {
       const least = state.players
         .filter((x) => x.alive && x.id !== p.id)
         .sort((a, b) => a.hand.length - b.hand.length)[0]
@@ -879,10 +914,45 @@ export function continueBeginTurn(state: GameSnapshot): void {
     }
   }
 
-  if (skipPlay) {
-    // 樂不思蜀／據守等：跳過出牌，但仍須進入棄牌（手牌超過體力上限時）
+  if (skipPlay || turn.shensuSkipPlay) {
+    // 樂不思蜀／神速選項二／巧變等：跳過出牌，但仍須進入棄牌
     log(state, `${p.name} 跳過出牌階段。`)
     finishEndPhase(state, p.id)
+    return
+  }
+
+  if (skills.includes('qiaobian') && !turn.qiaobianPlay && p.hand.length > 0) {
+    turn.qiaobianPlay = true
+    state.prompt = {
+      kind: 'choice',
+      message: '【巧變】棄一張手牌，跳過出牌階段？',
+      actorId: p.id,
+      choiceKey: 'qiaobian_phase',
+      cardUids: p.hand.map((c) => c.uid),
+      choices: [
+        ...p.hand.map((c) => ({
+          id: c.uid,
+          label: `棄【${getCardDef(c.defId).name}】並跳過出牌`,
+        })),
+        { id: 'skip', label: '不發動' },
+      ],
+    }
+    extraOf(state)._qiaobianPhase = 'play'
+    return
+  }
+
+  if (skills.includes('fangquan') && !turn.fangquanAsked) {
+    turn.fangquanAsked = true
+    state.prompt = {
+      kind: 'choice',
+      message: '【放權】是否跳過出牌階段？結束階段將一張手牌交給其他角色，令其獲得一個額外回合。',
+      actorId: p.id,
+      choiceKey: 'fangquan_skip',
+      choices: [
+        { id: 'yes', label: '跳過出牌（放權）' },
+        { id: 'no', label: '正常出牌' },
+      ],
+    }
     return
   }
 
@@ -915,9 +985,6 @@ export function canPlayCard(state: GameSnapshot, playerId: number, uid: string):
   const playAs = getPlayKindOptions(p, card)
 
   if (def.type === 'equip') return true
-
-  // 裸衣：不能用錦囊
-  if (p.luoyiActive && def.type === 'trick') return false
 
   const tryKinds = playAs.length ? playAs : [kind]
   for (const k of tryKinds) {
@@ -1056,7 +1123,9 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
     if (p.hp >= p.maxHp) return
     takeHand(state, playerId, uid)
     discardCard(state, card)
+    const before = p.hp
     p.hp = Math.min(p.maxHp, p.hp + 1)
+    trimBuquOnHeal(state, p, p.hp - before)
     setPlayFx(state, {
       cardName: def.name,
       suit: def.suit,
@@ -1122,11 +1191,9 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
     })
     log(state, `${p.name} 使用【桃園結義】。`)
     afterTrick(state, p)
-    beginWuxieWindow(state, {
-      type: 'taoyuan',
-      sourceId: playerId,
-      healed: [],
-    })
+    const wounded = state.players.filter((t) => t.alive && t.hp < t.maxHp).map((t) => t.id)
+    extraOf(state)._taoyuanQueue = { sourceId: playerId, targets: wounded }
+    continueTaoyuan(state)
     return
   }
 
@@ -1250,6 +1317,28 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
   }
 }
 
+export function continueTaoyuan(state: GameSnapshot): void {
+  const q = extraOf(state)._taoyuanQueue
+  if (!q) {
+    if (state.phase === 'play') setPlayPrompt(state)
+    return
+  }
+  while (q.targets.length) {
+    const tid = q.targets.shift()!
+    const pl = state.players[tid]
+    if (!pl?.alive || pl.hp >= pl.maxHp) continue
+    beginWuxieWindow(state, {
+      type: 'taoyuan_target',
+      sourceId: q.sourceId,
+      targetId: tid,
+    })
+    return
+  }
+  extraOf(state)._taoyuanQueue = undefined
+  log(state, '【桃園結義】結算完畢。')
+  if (state.phase === 'play') setPlayPrompt(state)
+}
+
 export function afterTrick(state: GameSnapshot, p: PlayerState): void {
   if (playerSkills(p).includes('jizhi')) {
     draw(state, p.id, 1)
@@ -1260,6 +1349,7 @@ export function afterTrick(state: GameSnapshot, p: PlayerState): void {
 export type PendingTrick =
   | { type: 'wuzhong'; sourceId: number }
   | { type: 'taoyuan'; sourceId: number; healed: number[] }
+  | { type: 'taoyuan_target'; sourceId: number; targetId: number }
   | { type: 'wugu'; sourceId: number }
   | { type: 'wugu_pick'; sourceId: number; pickerId: number }
   | {
@@ -1333,6 +1423,9 @@ export function continueWuxieAsk(state: GameSnapshot): void {
       const tn = state.players[aoeTargetId]?.name ?? ''
       const trickName = w.trick.type === 'aoe_target' ? w.trick.name : '錦囊'
       about = `是否無懈【${trickName}】對 ${tn} 的效果？`
+    } else if (w.trick.type === 'taoyuan_target') {
+      const tn = state.players[w.trick.targetId]?.name ?? ''
+      about = `是否無懈【桃園結義】對 ${tn} 的回復？`
     }
     // Do not put the asked seat's name in the message — spectators must not learn who holds 無懈.
     state.prompt = {
@@ -1375,6 +1468,11 @@ export function continueWuxieAsk(state: GameSnapshot): void {
       continueAoe(state)
       return
     }
+    if (trick.type === 'taoyuan_target') {
+      log(state, `【桃園結義】對 ${state.players[trick.targetId]?.name ?? ''} 的回復被【無懈可擊】抵消。`)
+      continueTaoyuan(state)
+      return
+    }
     log(state, `錦囊效果被【無懈可擊】抵消。`)
     if (trick.type === 'delayed') discardCard(state, trick.card)
     if (state.phase === 'play') setPlayPrompt(state)
@@ -1391,24 +1489,29 @@ export function resolvePendingTrick(state: GameSnapshot, trick: PendingTrick): v
     return
   }
   if (trick.type === 'taoyuan') {
-    const healed: number[] = []
-    for (const pl of state.players) {
-      if (pl.alive && pl.hp < pl.maxHp) {
-        pl.hp++
-        healed.push(pl.id)
+    extraOf(state)._taoyuanQueue = {
+      sourceId: trick.sourceId,
+      targets: state.players.filter((pl) => pl.alive && pl.hp < pl.maxHp).map((pl) => pl.id),
+    }
+    continueTaoyuan(state)
+    return
+  }
+  if (trick.type === 'taoyuan_target') {
+    const pl = state.players[trick.targetId]
+    if (pl?.alive && pl.hp < pl.maxHp) {
+      pl.hp++
+      trimBuquOnHeal(state, pl, 1)
+      log(state, `【桃園結義】${pl.name} 回覆 1 點體力。`)
+      if (pl.identity === 'lord') {
+        observePublicEvent(state, {
+          type: 'heal',
+          sourceId: trick.sourceId,
+          targetId: pl.id,
+          kind: 'taoyuan',
+        })
       }
     }
-    log(state, `【桃園結義】生效，傷者各回 1 體力。`)
-    const lord = state.players.find((pl) => pl.identity === 'lord' && pl.alive)
-    if (lord && healed.includes(lord.id)) {
-      observePublicEvent(state, {
-        type: 'heal',
-        sourceId: trick.sourceId,
-        targetId: lord.id,
-        kind: 'taoyuan',
-      })
-    }
-    setPlayPrompt(state)
+    continueTaoyuan(state)
     return
   }
   if (trick.type === 'wugu') {
@@ -2116,6 +2219,30 @@ export function resumeAfterResponse(state: GameSnapshot): void {
   // advance into the play phase so the respond_shan prompt is cleared (otherwise
   // the defender keeps being asked for 閃 forever).
   if (state.phase === 'play' || state.phase === 'draw') {
+    if (extraOf(state)._shensuMore) {
+      extraOf(state)._shensuMore = false
+      const actor = state.players[state.currentPlayer]
+      const foes = enemiesOf(state, actor.id)
+      if (foes.length) {
+        state.prompt = {
+          kind: 'choice',
+          message: '【神速】第二項：視為使用【殺】，選擇目標',
+          actorId: actor.id,
+          choiceKey: 'shensu_sha',
+          choices: [
+            ...foes.map((id) => ({ id: String(id), label: state.players[id].name })),
+            { id: 'skip', label: '不出殺' },
+          ],
+        }
+        return
+      }
+    }
+    if (turnSkipOf(state).shensuSkipPlay) {
+      turnSkipOf(state).shensuSkipPlay = false
+      log(state, `${state.players[state.currentPlayer].name} 跳過出牌階段。`)
+      finishEndPhase(state, state.currentPlayer)
+      return
+    }
     state.phase = 'play'
     setPlayPrompt(state)
   }
@@ -2140,8 +2267,16 @@ export function clearAoeQueue(state: GameSnapshot): void {
   if (queue?.kind === 'nanman') {
     const zhurong = state.players.find((p) => p.alive && playerSkills(p).includes('juxiang'))
     if (zhurong) {
-      draw(state, zhurong.id, 1)
-      log(state, `${zhurong.name} 發動巨象，摸一張牌。`)
+      const card = queue.card
+      const idx = card ? state.discard.findIndex((c) => c.uid === card.uid) : -1
+      if (idx >= 0 && card) {
+        const [got] = state.discard.splice(idx, 1)
+        zhurong.hand.push(got)
+        log(state, `${zhurong.name} 發動巨象，獲得【南蠻入侵】。`)
+      } else {
+        draw(state, zhurong.id, 1)
+        log(state, `${zhurong.name} 發動巨象，獲得【南蠻入侵】（改為摸一張）。`)
+      }
     }
   }
 }
@@ -2661,7 +2796,9 @@ export function isAwaitingZonePick(state: GameSnapshot): boolean {
       state.prompt.choiceKey === 'xiansi_cancel' ||
       state.prompt.choiceKey === 'yaowu' ||
       state.prompt.choiceKey === 'dying_save' ||
-      state.prompt.choiceKey === 'jieming')
+      state.prompt.choiceKey === 'jieming' ||
+      state.prompt.choiceKey === 'xingshang' ||
+      state.prompt.choiceKey === 'fangzhu_target')
   )
 }
 
@@ -2685,7 +2822,7 @@ export function resumeAfterDamageFlow(state: GameSnapshot): void {
     if (others.length && state.players[fangzhu.actorId]?.alive !== undefined) {
       state.prompt = {
         kind: 'choice',
-        message: `【放逐】選擇一名角色摸 ${fangzhu.lost} 張並跳過其下回合出牌階段`,
+        message: `【放逐】選擇一名角色摸 ${fangzhu.lost} 張並將其武將牌翻面`,
         actorId: fangzhu.actorId,
         choiceKey: 'fangzhu_target',
         choices: others.map((p) => ({ id: String(p.id), label: p.name })),
@@ -2820,40 +2957,42 @@ export function rankShort(rank: number | undefined): string {
 export function endPlayPhase(state: GameSnapshot, playerId: number): void {
   if (state.currentPlayer !== playerId || state.phase !== 'play') return
   if (state.prompt.kind === 'respond_shan' || state.prompt.kind === 'respond_sha') return
-  const p = state.players[playerId]
-  const skills = playerSkills(p)
-
-  if (skills.includes('jushou')) {
-    state.prompt = {
-      kind: 'choice',
-      message: '【據守】是否摸三張牌並跳過下回合出牌階段？',
-      actorId: playerId,
-      choiceKey: 'jushou',
-      choices: [
-        { id: 'yes', label: '發動據守' },
-        { id: 'no', label: '不發動' },
-      ],
-    }
-    return
-  }
   finishEndPhase(state, playerId)
 }
 
 export function finishEndPhase(state: GameSnapshot, playerId: number): void {
   const p = state.players[playerId]
   const skills = playerSkills(p)
+  extraOf(state)._discardPhaseCards = []
 
-  // 閉月
-  if (skills.includes('biyue')) {
-    draw(state, playerId, 1)
-    log(state, `${p.name} 發動閉月，摸一張牌。`)
-  }
-
-  // 克己：未出殺跳過棄牌
+  // 克己：未出殺跳過棄牌，但仍進入結束階段
   if (skills.includes('keji') && !p.shaUsedThisTurn && !p.shaPlayedThisTurn) {
     log(state, `${p.name} 發動克己，跳過棄牌階段。`)
-    advanceTurn(state)
+    runEndPhaseSkills(state, playerId)
     return
+  }
+
+  if (skills.includes('qiaobian') && !turnSkipOf(state).qiaobianDiscard && p.hand.length > 0) {
+    const limit = handLimit(p)
+    if (p.hand.length > limit) {
+      turnSkipOf(state).qiaobianDiscard = true
+      state.prompt = {
+        kind: 'choice',
+        message: '【巧變】棄一張手牌，跳過棄牌階段？',
+        actorId: playerId,
+        choiceKey: 'qiaobian_phase',
+        cardUids: p.hand.map((c) => c.uid),
+        choices: [
+          ...p.hand.map((c) => ({
+            id: c.uid,
+            label: `棄【${getCardDef(c.defId).name}】並跳過棄牌`,
+          })),
+          { id: 'skip', label: '不發動' },
+        ],
+      }
+      extraOf(state)._qiaobianPhase = 'discard'
+      return
+    }
   }
 
   const limit = handLimit(p)
@@ -2869,7 +3008,112 @@ export function finishEndPhase(state: GameSnapshot, playerId: number): void {
     }
     return
   }
+  runEndPhaseSkills(state, playerId)
+}
+
+export function runEndPhaseSkills(state: GameSnapshot, playerId: number): void {
+  const p = state.players[playerId]
+  const skills = playerSkills(p)
+  const turn = turnSkipOf(state)
+  state.phase = 'end'
+
+  const discarded = extraOf(state)._discardPhaseCards ?? []
+  const guzheng = state.players.find(
+    (x) => x.alive && x.id !== playerId && playerSkills(x).includes('guzheng'),
+  )
+  if (guzheng && discarded.length && !turn.guzhengAsked) {
+    turn.guzhengAsked = true
+    extraOf(state)._discardPhaseCards = discarded
+    if (guzheng.isHuman) {
+      state.prompt = {
+        kind: 'choice',
+        message: `【固政】將 ${p.name} 此階段棄置的一張牌交還，然後可獲得其餘棄牌`,
+        actorId: guzheng.id,
+        choiceKey: 'guzheng_return',
+        cardUids: discarded.map((c) => c.uid),
+        choices: [
+          ...discarded.map((c) => ({
+            id: c.uid,
+            label: `交還【${getCardDef(c.defId).name}】`,
+          })),
+          { id: 'skip', label: '不發動' },
+        ],
+      }
+      return
+    }
+    applyGuzheng(state, guzheng.id, playerId, discarded[0]!.uid, true)
+  }
+
+  if (skills.includes('jushou') && !turn.jushouAsked) {
+    turn.jushouAsked = true
+    state.prompt = {
+      kind: 'choice',
+      message: '【據守】是否摸三張牌並將武將牌翻面？',
+      actorId: playerId,
+      choiceKey: 'jushou',
+      choices: [
+        { id: 'yes', label: '發動據守' },
+        { id: 'no', label: '不發動' },
+      ],
+    }
+    return
+  }
+
+  if (skills.includes('biyue')) {
+    draw(state, playerId, 1)
+    log(state, `${p.name} 發動閉月，摸一張牌。`)
+  }
+
+  if (p.fangquanPending && p.hand.length > 0) {
+    const others = state.players.filter((x) => x.alive && x.id !== playerId)
+    if (others.length) {
+      state.prompt = {
+        kind: 'choice',
+        message: '【放權】將一張手牌交給一名其他角色，令其獲得一個額外回合',
+        actorId: playerId,
+        choiceKey: 'fangquan_give',
+        cardUids: p.hand.map((c) => c.uid),
+        choices: p.hand.flatMap((c) =>
+          others.map((o) => ({
+            id: `${c.uid}:${o.id}`,
+            label: `【${getCardDef(c.defId).name}】→ ${o.name}`,
+          })),
+        ),
+      }
+      return
+    }
+  }
+
+  extraOf(state)._discardPhaseCards = []
   advanceTurn(state)
+}
+
+export function applyGuzheng(
+  state: GameSnapshot,
+  guzhengId: number,
+  ownerId: number,
+  returnUid: string,
+  takeRest: boolean,
+): void {
+  const discarded = takeDiscardPhaseCards(state)
+  const gz = state.players[guzhengId]
+  const owner = state.players[ownerId]
+  const ret = discarded.find((c) => c.uid === returnUid)
+  const rest = discarded.filter((c) => c.uid !== returnUid)
+  if (ret) {
+    const idx = state.discard.findIndex((c) => c.uid === ret.uid)
+    if (idx >= 0) state.discard.splice(idx, 1)
+    owner.hand.push(ret)
+    log(state, `${gz.name} 發動固政，將【${getCardDef(ret.defId).name}】交還 ${owner.name}。`)
+  }
+  if (takeRest) {
+    for (const c of rest) {
+      const idx = state.discard.findIndex((x) => x.uid === c.uid)
+      if (idx >= 0) state.discard.splice(idx, 1)
+      gz.hand.push(c)
+    }
+    if (rest.length) log(state, `${gz.name} 獲得其餘 ${rest.length} 張棄牌。`)
+  }
 }
 
 export function handleDiscardPick(state: GameSnapshot, playerId: number, uid: string): void {
@@ -2878,6 +3122,7 @@ export function handleDiscardPick(state: GameSnapshot, playerId: number, uid: st
   const c = takeHand(state, playerId, uid)
   if (!c) return
   discardCard(state, c)
+  trackDiscard(state, c)
   const left = need - 1
   if (left > 0) {
     state.prompt = {
@@ -2888,19 +3133,19 @@ export function handleDiscardPick(state: GameSnapshot, playerId: number, uid: st
     }
     return
   }
-  const guzheng = state.players.find(
-    (x) => x.alive && x.id !== playerId && playerSkills(x).includes('guzheng'),
-  )
-  if (guzheng) {
-    draw(state, guzheng.id, 1)
-    log(state, `${guzheng.name} 發動固政，摸一張牌。`)
-  }
-  advanceTurn(state)
+  runEndPhaseSkills(state, playerId)
 }
 
 export function advanceTurn(state: GameSnapshot): void {
   checkVictory(state)
   if (state.winnerIds) return
+  const extraSeat = popExtraTurn(state)
+  if (extraSeat !== undefined && state.players[extraSeat]?.alive) {
+    log(state, `${state.players[extraSeat].name} 獲得一個額外回合。`)
+    state.currentPlayer = extraSeat
+    beginTurn(state)
+    return
+  }
   const n = state.players.length
   let next = state.currentPlayer
   for (let i = 0; i < n; i++) {

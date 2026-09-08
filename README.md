@@ -25,3 +25,5 @@ npm run test:skills  # longer headless AI match review
 ## Version
 
 Shown on the start screen as `vX.Y.Z` (`src/version.ts`).
+
+v0.19.0 aligns identity-mode play with paper 標準＋軍爭／風火林山 rules: 主公+1 HP and 主公技, 擊殺反賊摸 3／主公殺忠臣棄所有牌, 判定區後置先判, 鬼才／鬼道（鬼道獲得原判定牌）, 翻面, 桃園按目標無懈, 裸衣少摸, 神速一至兩項, 據守／放逐翻面, 行殤獲得死亡角色的牌, 不屈「創」, 巧變跳過階段, 固政, 好施可選多摸.

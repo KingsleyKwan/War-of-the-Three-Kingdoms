@@ -100,21 +100,14 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
     const uids = [...(prompt.cardUids ?? [])]
     const selected = prompt.selectedCardUids ?? []
     if (selected.length < need && uids.length) {
-      let next: string | undefined
-      if (prompt.skillId === 'luoyi') {
-        const picks = pickLuoyiDiscardUids(state, playerId, need)
-        next = picks.find((u) => !selected.includes(u) && uids.includes(u))
-      }
-      if (!next) {
-        // Prefer discarding low-value cards
-        const ranked = uids
-          .filter((u) => !selected.includes(u))
-          .sort(
-            (a, b) =>
-              scoreDiscard(state, playerId, a) - scoreDiscard(state, playerId, b),
-          )
-        next = ranked[0]
-      }
+      // Prefer discarding low-value cards
+      const ranked = uids
+        .filter((u) => !selected.includes(u))
+        .sort(
+          (a, b) =>
+            scoreDiscard(state, playerId, a) - scoreDiscard(state, playerId, b),
+        )
+      const next = ranked[0]
       if (next) {
         selectCard(state, playerId, next)
         if ((state.prompt.selectedCardUids?.length ?? 0) >= need) {
@@ -216,10 +209,6 @@ export function stepAiSimple(state: GameSnapshot, playerId: number): void {
     }
     if (skills.some((s) => s.id === 'qiangxi') && !p.qiangxiUsed && p.hp > 1) {
       activateSkill(state, playerId, 'qiangxi')
-      return
-    }
-    if (skills.some((s) => s.id === 'luoyi') && shouldActivateLuoyi(state, playerId)) {
-      activateSkill(state, playerId, 'luoyi')
       return
     }
     if (skills.some((s) => s.id === 'zhangba') && !p.hand.some((c) => cardKind(c) === 'sha')) {
@@ -368,39 +357,6 @@ function scoreDiscard(state: GameSnapshot, playerId: number, uid: string): numbe
   }
   if (def.type === 'trick') return 6
   return 3
-}
-
-/** 裸衣 only when we can still 殺 a foe after discarding 2 cards. */
-function shouldActivateLuoyi(state: GameSnapshot, playerId: number): boolean {
-  const p = state.players[playerId]
-  if (p.luoyiActive || p.hand.length < 3) return false
-  const shaCards = p.hand.filter((c) => cardKind(c) === 'sha')
-  if (!shaCards.length) return false
-  // Must keep ≥1 殺 after discarding 2
-  const nonSha = p.hand.filter((c) => cardKind(c) !== 'sha')
-  const spareSha = Math.max(0, shaCards.length - 1)
-  if (nonSha.length + spareSha < 2) return false
-  const foes = getLegalTargets(state, playerId, 'sha').filter(
-    (tid) => scoreAttackTarget(state, playerId, tid) > 0,
-  )
-  return foes.length > 0
-}
-
-function pickLuoyiDiscardUids(
-  state: GameSnapshot,
-  playerId: number,
-  need: number,
-): string[] {
-  const p = state.players[playerId]
-  const shaUids = p.hand.filter((c) => cardKind(c) === 'sha').map((c) => c.uid)
-  const keepSha = shaUids[0]
-  const ranked = p.hand
-    .filter((c) => c.uid !== keepSha)
-    .sort(
-      (a, b) =>
-        scoreDiscard(state, playerId, a.uid) - scoreDiscard(state, playerId, b.uid),
-    )
-  return ranked.slice(0, need).map((c) => c.uid)
 }
 
 function equipPlayScore(state: GameSnapshot, playerId: number, card: CardInstance): number {
@@ -750,6 +706,18 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
     return ids.includes('give') ? 'give' : ids[0] ?? null
   }
   // Expansion prompts: prefer useful first options / hostiles
+  if (key === 'qiaobian_phase') return ids.includes('skip') ? 'skip' : ids[ids.length - 1] ?? null
+  if (key === 'haoshi') return ids.includes('yes') ? 'yes' : ids[0] ?? null
+  if (key === 'luoyi') return ids.includes('yes') ? 'yes' : ids[0] ?? null
+  if (key === 'fangquan_skip') return ids.includes('no') ? 'no' : ids[0] ?? null
+  if (key === 'tieqi_ask' || key === 'bagua_ask') return ids.includes('yes') ? 'yes' : ids[0] ?? null
+  if (key === 'xiangle_pay') return ids.find((id) => id !== 'cancel') ?? ids[0] ?? null
+  if (key === 'xingshang' || key === 'guzheng_rest') return ids.includes('take') ? 'take' : ids.includes('yes') ? 'yes' : ids[0] ?? null
+  if (key === 'judge_replace') return 'skip'
+  if (key === 'hujia_ask') return ids.includes('hujia') ? 'hujia' : ids[0] ?? null
+  if (key === 'hujia_shan' || key === 'jijiang_sha') {
+    return ids.find((id) => id !== 'skip') ?? 'skip'
+  }
   if (
     key === 'shensu' ||
     key === 'shuangxiong' ||
