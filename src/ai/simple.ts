@@ -520,6 +520,20 @@ function pickChoice(state: GameSnapshot, playerId: number): string | null {
   if (key === 'ganglie') return ids.includes('discard') ? 'discard' : 'damage'
   if (key === 'jianxiong') return ids.includes('take') ? 'take' : 'skip'
   if (key === 'guanxing') return 'keep'
+  if (key === 'guanxing_split') return ids.includes('confirm') ? 'confirm' : ids[0] ?? null
+  if (key === 'yiji_give') {
+    const self = String(playerId)
+    return ids.includes(self) ? self : ids[0] ?? null
+  }
+  if (key === 'huashen_general') return ids.find((id) => id !== 'skip') ?? ids[0] ?? null
+  if (key === 'huashen_skill') return ids[0] ?? null
+  if (key === 'zhiji_pick') {
+    const p = state.players[playerId]
+    if (p.hp < p.maxHp && ids.includes('recover')) return 'recover'
+    return ids.includes('draw') ? 'draw' : ids[0] ?? null
+  }
+  if (key === 'guhuo_challenge') return ids.includes('skip') ? 'skip' : ids[0] ?? null
+  if (key === 'haoshi_target') return ids[0] ?? null
   if (key === 'play_as') {
     // Prefer attack conversions
     if (ids.includes('sha')) return 'sha'

@@ -12,15 +12,14 @@ import { armorKind, countDiscardable, drawJudgeCard, ignoresArmor, weaponKind } 
 import { observePublicEvent } from '../ai/mind'
 import {
   log, draw, discardCard, takeHand, turnSkipOf, setPlayFx, pushDamageFx, skillLabel,
-  HUASHEN_POOL, pickHuashenSkill,
 } from './core'
 import {
   setPlayPrompt, resumeAfterResponse, continueAoe, getAoeQueue,
   leaveEquipArea, applyJudgeReplaceSync, responseCards, isAwaitingZonePick,
   beginZonePick, legalTargets, resumeAfterDamageFlow,
-  applyHuashen, identityKillReward, tryJudgeReplace,
+  identityKillReward, tryJudgeReplace,
 } from './game'
-import { maybeTiandu } from './official'
+import { maybeTiandu, extraOf, startYiji, dealHuashenCards } from './official'
 
 export function dealDamage(
   state: GameSnapshot,
@@ -102,11 +101,9 @@ export function dealDamage(
   // After-damage skills that still apply while dying (e.g. 遺計 can draw 桃 before save)
   if (t.generalId) {
     const afterSkills = playerSkills(t)
-    // 遺計：每受到1點傷害後摸兩張牌
+    // 遺計：每受到1點傷害後觀看牌堆頂兩張並交給任意角色（於瀕死結算前）
     if (afterSkills.includes('yiji') && amount > 0) {
-      const n = amount * 2
-      draw(state, targetId, n)
-      log(state, `${t.name} 發動遺計，摸 ${n} 張牌。`)
+      extraOf(state)._yiji = { actorId: targetId, remaining: amount, cards: [] }
     }
     if (afterSkills.includes('fangzhu') && amount > 0) {
       const others = state.players.filter((p) => p.alive && p.id !== targetId)
@@ -118,7 +115,7 @@ export function dealDamage(
       }
     }
     if (afterSkills.includes('xinsheng') && amount > 0) {
-      applyHuashen(state, t)
+      dealHuashenCards(state, t, 1)
     }
   }
 
@@ -148,6 +145,8 @@ export function dealDamage(
       _pendingDying?: { targetId: number; killerId: number | null }
     })._pendingDying = { targetId, killerId: sourceId }
   }
+
+  if (extraOf(state)._yiji && startYiji(state)) return true
 
   if (
     amount > 0 &&

@@ -85,6 +85,8 @@ export interface PlayerState {
   tianCards?: CardInstance[]
   /** 化身所變成的武將 */
   huashenGeneralId?: string
+  /** 化身武將牌（左慈） */
+  huashenCards?: string[]
   /** 黃天主公技：本回合已交給張角 */
   huangtianUsed?: boolean
   /** 放權：結束階段棄牌並給額外回合 */

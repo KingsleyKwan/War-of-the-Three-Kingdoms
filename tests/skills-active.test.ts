@@ -51,6 +51,19 @@ describe('zhiheng', () => {
     assert.ok(logged(state, '制衡'))
     assert.ok(!actionIds(state).includes('zhiheng'))
   })
+
+  it('can discard equipped cards', () => {
+    const state = forcePlay(duel('sunquan', 'caocao'))
+    const p = state.players[0]
+    const w = cardOf('qinggang')
+    p.hand = [cardOf('sha')]
+    p.equips.weapon = w
+    forcePlay(state, 0)
+    pickSkillCards(state, 0, 'zhiheng', [w.uid])
+    assert.equal(p.equips.weapon, undefined)
+    assert.equal(p.zhihengUsed, true)
+    assert.ok(logged(state, '制衡'))
+  })
 })
 
 describe('rende', () => {

@@ -16,6 +16,8 @@ import {
   resumeJudgeReplace,
   startDelayedJudges,
   tryJudgeReplace,
+  finishTuntian,
+  drainTuntian,
 } from './official'
 import {
   askShan,
@@ -26,6 +28,8 @@ import {
   onShaDodged,
   resumeAfterDamageFlow,
   resumeAfterResponse,
+  setPlayPrompt,
+  runEndPhaseSkills,
 } from './game'
 
 export function runNextDelayedJudge(state: GameSnapshot): boolean {
@@ -199,6 +203,22 @@ export function resumeAfterJudgeReplace(
     applyShuangxiong(state, resume.ownerId, judged)
     continueBeginTurn(state)
     return
+  }
+  if (resume.kind === 'tuntian') {
+    const q = extraOf(state)._tuntianQueue
+    if (q?.length) q.shift()
+    finishTuntian(state, resume.ownerId, judged)
+    if (drainTuntian(state)) return
+    const tag = extraOf(state)._tuntianResume
+    extraOf(state)._tuntianResume = undefined
+    if (tag === 'play') setPlayPrompt(state)
+    else if (tag === 'begin') continueBeginTurn(state)
+    else if (tag === 'damage') resumeAfterDamageFlow(state)
+    else if (tag === 'response') resumeAfterResponse(state)
+    else if (tag === 'end') runEndPhaseSkills(state, state.currentPlayer)
+    else if (state.phase === 'play') setPlayPrompt(state)
+    else if (state.phase === 'end') runEndPhaseSkills(state, state.currentPlayer)
+    else continueBeginTurn(state)
   }
 }
 

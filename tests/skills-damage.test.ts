@@ -5,18 +5,31 @@ import { playerSkills } from '../src/engine/helpers'
 import { cardOf, duel, forcePlay, logged } from './harness'
 
 describe('yiji', () => {
-  it('draws two cards per point of damage', () => {
+  it('peeks two cards per damage point and gives them to a chosen seat', () => {
     const state = forcePlay(duel('guojia', 'caocao'))
-    state.deck.push(...state.discard.splice(0))
+    state.deck.push(
+      ...state.discard.splice(0),
+      cardOf('sha'),
+      cardOf('shan'),
+      cardOf('tao'),
+      cardOf('jiu'),
+      cardOf('wuzhong'),
+      cardOf('guohe'),
+    )
     const gj = state.players[0]
     const before = gj.hand.length
     debugDealDamage(state, 0, 1, 1)
     assert.ok(logged(state, '遺計'))
+    assert.equal(state.prompt.choiceKey, 'yiji_give')
+    resolveChoice(state, 0, '0')
     assert.ok(gj.hand.length >= before + 2)
-    if (gj.alive) {
+    if (gj.alive && gj.hp > 0) {
       const before2 = gj.hand.length
       debugDealDamage(state, 0, 2, 1)
-      assert.ok(state.log.some((l) => l.text.includes('遺計') && l.text.includes('摸 4')))
+      assert.equal(state.prompt.choiceKey, 'yiji_give')
+      resolveChoice(state, 0, '0')
+      assert.equal(state.prompt.choiceKey, 'yiji_give')
+      resolveChoice(state, 0, '0')
       assert.ok(gj.hand.length >= before2 + 4)
     }
   })

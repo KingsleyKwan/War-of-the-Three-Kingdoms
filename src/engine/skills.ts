@@ -1,7 +1,7 @@
 import { getGeneral } from '../data/generals'
 import { getCardDef } from '../data/cards'
 import type { GameSnapshot, PlayerState } from './types'
-import { attackRangeOf, canReach, enemiesOf, getDistance, playerSkills } from './helpers'
+import { attackRangeOf, canReach, enemiesOf, equipSlots, getDistance, playerSkills } from './helpers'
 import { mayUseSha, weaponKind } from './weapons'
 
 export interface SkillAction {
@@ -21,8 +21,11 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
   if (skills.includes('kurou') && p.hp > 0) {
     actions.push({ id: 'kurou', label: '苦肉', hint: '失去1點體力，摸兩張牌' })
   }
-  if (skills.includes('zhiheng') && !p.zhihengUsed && p.hand.length > 0) {
-    actions.push({ id: 'zhiheng', label: '制衡', hint: '棄任意張牌，摸等量的牌' })
+  if (skills.includes('zhiheng') && !p.zhihengUsed) {
+    const hasEquip = equipSlots().some((s) => !!p.equips[s])
+    if (p.hand.length > 0 || hasEquip) {
+      actions.push({ id: 'zhiheng', label: '制衡', hint: '棄任意張牌（含裝備），摸等量的牌' })
+    }
   }
   if (skills.includes('rende') && p.hand.length > 0) {
     const others = state.players.filter((o) => o.alive && o.id !== playerId)
@@ -79,7 +82,7 @@ export function listSkillActions(state: GameSnapshot, playerId: number): SkillAc
     }
   }
   if (skills.includes('guhuo') && !p.guhuoUsed && p.hand.length > 0) {
-    actions.push({ id: 'guhuo', label: '蠱惑', hint: '將一張手牌當殺、閃、桃或無中生有' })
+    actions.push({ id: 'guhuo', label: '蠱惑', hint: '聲稱基本或非延時錦囊，其他角色可質疑' })
   }
   if (skills.includes('tianyi') && !p.tianyiUsed && p.hand.length > 0) {
     const targets = enemiesOf(state, playerId).some((tid) => state.players[tid]?.hand.length > 0)

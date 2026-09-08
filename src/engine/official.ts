@@ -44,6 +44,21 @@ export type ExtraState = GameSnapshot & {
   _hujia?: { cursor: number; sourceId: number; targetId: number; cardUid: string }
   _jijiang?: { sourceId: number; targetId: number; cursor: number }
   _fangquanLegacyTarget?: number
+  _guanxing?: CardInstance[]
+  _yiji?: { actorId: number; remaining: number; cards: CardInstance[] }
+  _haoshiUids?: string[]
+  _huashenPick?: string
+  _huashenWhen?: 'prep' | 'end'
+  _tuntianQueue?: { ownerId: number; judged: CardInstance }[]
+  _tuntianResume?: 'play' | 'begin' | 'damage' | 'response' | 'end'
+  _playAsKind?: string
+  _guhuo?: {
+    actorId: number
+    uid: string
+    asKind: string
+    cursor: number
+    asked: number
+  }
 }
 
 export type JudgePrefer = 'red' | 'black' | 'heart' | 'club' | 'nonheart'
@@ -103,23 +118,343 @@ export function seedHuashenPile(state: GameSnapshot): void {
 }
 
 export function applyHuashen(state: GameSnapshot, p: PlayerState): void {
+  dealHuashenCards(state, p, 1)
+}
+
+export const HUASHEN_BANNED = new Set([
+  'hujia',
+  'jijiang',
+  'jiuyuan',
+  'huangtian',
+  'luanwu',
+  'niepan',
+  'zaoxian',
+  'zhiji',
+  'hunzi',
+])
+
+export function dealHuashenCards(state: GameSnapshot, p: PlayerState, n: number): void {
   const e = extraOf(state)
   const pile = e._huashenPile ?? []
-  if (!pile.length) {
-    p.extraSkills = p.extraSkills?.length ? p.extraSkills : []
-    return
+  const got: string[] = []
+  for (let i = 0; i < n; i++) {
+    const gid = pile.shift()
+    if (!gid) break
+    got.push(gid)
   }
-  const gid = pile.splice(Math.floor(Math.random() * pile.length), 1)[0]
-  if (!gid) return
-  p.huashenGeneralId = gid
-  try {
-    const g = getGeneral(gid)
-    p.extraSkills = [...g.skills]
-    log(state, `${p.name} 發動化身，化為【${g.name}】（${g.skills.map(skillLabel).join('、') || '無技能'}）。`)
-  } catch {
-    p.extraSkills = []
+  if (!got.length) return
+  p.huashenCards = [...(p.huashenCards ?? []), ...got]
+  const names = got.map((id) => {
+    try {
+      return getGeneral(id).name
+    } catch {
+      return id
+    }
+  })
+  log(state, `${p.name} 獲得化身：${names.map((n) => `【${n}】`).join('、')}。`)
+}
+
+export function dealStartingHuashen(state: GameSnapshot): void {
+  seedHuashenPile(state)
+  for (const p of state.players) {
+    if (!p.alive || !p.generalId) continue
+    if (playerSkills(p).includes('huashen')) dealHuashenCards(state, p, 2)
   }
 }
+
+export function huashenSkillIds(gid: string): string[] {
+  try {
+    return getGeneral(gid).skills.filter((id) => !HUASHEN_BANNED.has(id))
+  } catch {
+    return []
+  }
+}
+
+/** true = human prompt pending */
+export function askHuashen(
+  state: GameSnapshot,
+  p: PlayerState,
+  when: 'prep' | 'end',
+): boolean {
+  const cards = p.huashenCards ?? []
+  if (!cards.length) return false
+  const turn = turnSkipOf(state)
+  if (when === 'prep') {
+    if (turn.huashenPrepAsked) return false
+    turn.huashenPrepAsked = true
+  } else {
+    if (turn.huashenEndAsked) return false
+    turn.huashenEndAsked = true
+  }
+  extraOf(state)._huashenWhen = when
+  const options = cards.filter((id) => huashenSkillIds(id).length > 0)
+  if (!options.length) return false
+  if (p.isHuman) {
+    state.prompt = {
+      kind: 'choice',
+      message: '【化身】選擇一張化身並聲明其中一個技能（非主公技／覺醒／限定）',
+      actorId: p.id,
+      choiceKey: 'huashen_general',
+      choices: [
+        ...options.map((id) => {
+          let name = id
+          try {
+            name = getGeneral(id).name
+          } catch {
+            /* ignore */
+          }
+          return { id, label: `【${name}】` }
+        }),
+        { id: 'skip', label: '維持目前化身' },
+      ],
+    }
+    return true
+  }
+  applyChosenHuashen(state, p, options[0]!, huashenSkillIds(options[0]!)[0]!)
+  return false
+}
+
+export function applyChosenHuashen(
+  state: GameSnapshot,
+  p: PlayerState,
+  gid: string,
+  skillId: string,
+): void {
+  p.huashenGeneralId = gid
+  p.extraSkills = [skillId]
+  let gname = gid
+  try {
+    gname = getGeneral(gid).name
+  } catch {
+    /* ignore */
+  }
+  log(state, `${p.name} 發動化身，化為【${gname}】並獲得【${skillLabel(skillId)}】。`)
+}
+
+export function startYiji(state: GameSnapshot): boolean {
+  const e = extraOf(state)
+  const y = e._yiji
+  if (!y || y.remaining <= 0) {
+    e._yiji = undefined
+    return false
+  }
+  const actor = state.players[y.actorId]
+  if (!actor) {
+    e._yiji = undefined
+    return false
+  }
+  const cards: CardInstance[] = []
+  for (let i = 0; i < 2; i++) {
+    if (state.deck.length === 0 && state.discard.length) {
+      state.deck = shuffle(state.discard)
+      state.discard = []
+    }
+    const c = state.deck.pop()
+    if (c) cards.push(c)
+  }
+  y.cards = cards
+  y.remaining -= 1
+  if (!cards.length) {
+    if (y.remaining > 0) return startYiji(state)
+    e._yiji = undefined
+    return false
+  }
+  const names = cards.map((c) => getCardDef(c.defId).name).join('、')
+  log(state, `${actor.name} 發動遺計，觀看牌堆頂：${names}。`)
+  const alive = state.players.filter((x) => x.alive || x.id === actor.id)
+  if (actor.isHuman) {
+    state.prompt = {
+      kind: 'choice',
+      message: `【遺計】將【${names}】交給一名角色`,
+      actorId: actor.id,
+      choiceKey: 'yiji_give',
+      choices: alive.map((x) => ({
+        id: String(x.id),
+        label: x.id === actor.id ? `${x.name}（自己）` : x.name,
+      })),
+    }
+    return true
+  }
+  giveYiji(state, actor.id)
+  if (y.remaining > 0) return startYiji(state)
+  e._yiji = undefined
+  return false
+}
+
+export function giveYiji(state: GameSnapshot, toId: number): void {
+  const e = extraOf(state)
+  const y = e._yiji
+  if (!y) return
+  const actor = state.players[y.actorId]
+  const dest = state.players[toId] ?? actor
+  if (!dest) return
+  dest.hand.push(...y.cards)
+  const names = y.cards.map((c) => getCardDef(c.defId).name).join('、')
+  log(
+    state,
+    `${actor?.name ?? ''} 發動遺計，將【${names}】交給 ${dest.name}。`,
+  )
+  y.cards = []
+}
+
+export function leastHandSeats(state: GameSnapshot, exceptId: number): PlayerState[] {
+  const others = state.players.filter((x) => x.alive && x.id !== exceptId)
+  if (!others.length) return []
+  const min = Math.min(...others.map((x) => x.hand.length))
+  return others.filter((x) => x.hand.length === min)
+}
+
+/** true = waiting for human to pick cards */
+export function startHaoshiGive(state: GameSnapshot, p: PlayerState): boolean {
+  if (p.hand.length <= 5) return false
+  const give = Math.floor(p.hand.length / 2)
+  const seats = leastHandSeats(state, p.id)
+  if (give <= 0 || !seats.length) return false
+  if (!p.isHuman) {
+    const uids = p.hand.slice(0, give).map((c) => c.uid)
+    finishHaoshiGive(state, p, uids, seats[0]!.id)
+    return false
+  }
+  extraOf(state)._haoshiUids = undefined
+  state.prompt = {
+    kind: 'skill_cards',
+    message: `【好施】選擇 ${give} 張手牌交給手牌最少的角色`,
+    actorId: p.id,
+    skillId: 'haoshi',
+    cardUids: p.hand.map((c) => c.uid),
+    selectedCardUids: [],
+    minTargets: give,
+    maxTargets: give,
+    choices: [{ id: 'confirm', label: `交出 ${give} 張` }],
+    choiceKey: 'skill_confirm',
+  }
+  return true
+}
+
+export function finishHaoshiGive(
+  state: GameSnapshot,
+  p: PlayerState,
+  uids: string[],
+  toId: number,
+): void {
+  const dest = state.players[toId]
+  if (!dest?.alive) return
+  const moved: CardInstance[] = []
+  for (const uid of uids) {
+    const c = takeHand(state, p.id, uid)
+    if (c) moved.push(c)
+  }
+  dest.hand.push(...moved)
+  log(state, `${p.name} 發動好施，交給 ${dest.name} ${moved.length} 張牌。`)
+}
+
+export function enqueueTuntian(
+  state: GameSnapshot,
+  ownerId: number,
+  judged: CardInstance,
+): void {
+  const e = extraOf(state)
+  e._tuntianQueue = [...(e._tuntianQueue ?? []), { ownerId, judged }]
+}
+
+/** true = 鬼才／鬼道 prompt pending */
+export function drainTuntian(state: GameSnapshot): boolean {
+  const e = extraOf(state)
+  const q = e._tuntianQueue
+  if (!q?.length) return false
+  const item = q[0]!
+  const replaced = tryJudgeReplace(state, item.judged, 'nonheart', item.ownerId, {
+    kind: 'tuntian',
+    ownerId: item.ownerId,
+  })
+  if (!replaced) return true
+  q.shift()
+  finishTuntian(state, item.ownerId, replaced)
+  return drainTuntian(state)
+}
+
+export function finishTuntian(
+  state: GameSnapshot,
+  ownerId: number,
+  judged: CardInstance,
+): void {
+  const p = state.players[ownerId]
+  if (!p) {
+    discardCard(state, judged)
+    return
+  }
+  const suit = effectiveSuit(judged, p)
+  if (suit !== 'heart') {
+    p.tianCards = [...(p.tianCards ?? []), judged]
+    p.tianCount = (p.tianCount ?? 0) + 1
+    log(state, `${p.name} 發動屯田，判定非紅桃，獲得一張「田」（共 ${p.tianCount} 張）。`)
+  } else {
+    discardCard(state, judged)
+    log(state, `${p.name} 發動屯田，判定為紅桃，未獲得田。`)
+  }
+}
+
+export function finishGuanxingSplit(state: GameSnapshot, topUids: string[]): void {
+  const peeked = extraOf(state)._guanxing ?? []
+  extraOf(state)._guanxing = undefined
+  const p = state.players[state.currentPlayer]
+  const top = topUids
+    .map((uid) => peeked.find((c) => c.uid === uid))
+    .filter((c): c is CardInstance => !!c)
+  const bottom = peeked.filter((c) => !topUids.includes(c.uid))
+  for (let i = top.length - 1; i >= 0; i--) state.deck.push(top[i]!)
+  state.deck = [...bottom, ...state.deck]
+  log(
+    state,
+    `${p.name} 發動觀星，${top.length} 張置於牌堆頂、${bottom.length} 張置於牌堆底。`,
+  )
+}
+
+export function maybeQueueTuntian(state: GameSnapshot, ownerId: number): void {
+  if (state.currentPlayer === ownerId) return
+  const p = state.players[ownerId]
+  if (!p?.alive || !playerSkills(p).includes('tuntian')) return
+  if (state.deck.length === 0 && state.discard.length) {
+    state.deck = shuffle(state.discard)
+    state.discard = []
+  }
+  const judged = state.deck.pop()
+  if (!judged) return
+  enqueueTuntian(state, ownerId, judged)
+  log(state, `${p.name} 的【屯田】即將判定。`)
+}
+
+export const GUHUO_AS_CHOICES: { id: string; label: string }[] = [
+  { id: 'sha', label: '殺' },
+  { id: 'huosha', label: '火殺' },
+  { id: 'leisha', label: '雷殺' },
+  { id: 'shan', label: '閃' },
+  { id: 'tao', label: '桃' },
+  { id: 'jiu', label: '酒' },
+  { id: 'wuzhong', label: '無中生有' },
+  { id: 'guohe', label: '過河拆橋' },
+  { id: 'shunshou', label: '順手牽羊' },
+  { id: 'juedou', label: '決鬥' },
+  { id: 'nanman', label: '南蠻入侵' },
+  { id: 'wanjian', label: '萬箭齊發' },
+  { id: 'taoyuan', label: '桃園結義' },
+  { id: 'wugu', label: '五穀豐登' },
+  { id: 'jiedao', label: '借刀殺人' },
+  { id: 'huogong', label: '火攻' },
+  { id: 'tiesuo', label: '鐵索連環' },
+  { id: 'wuxie', label: '無懈可擊' },
+]
+
+export function guhuoKindMatches(actual: string, named: string): boolean {
+  if (actual === named) return true
+  if (named === 'sha' && (actual === 'huosha' || actual === 'leisha')) return true
+  return false
+}
+
+export function jushouDrawCount(p: PlayerState): number {
+  return Math.max(2, p.maxHp - p.hp + 2)
+}
+
 
 /** 判定區：後放置的先判定（官方 LIFO）。 */
 export function startDelayedJudges(state: GameSnapshot, ownerId: number): void {

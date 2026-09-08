@@ -17,8 +17,14 @@ import {
 import {
   setPlayPrompt, legalTargets, askShan, pindian, dealDamage, trySave,
   getDying, isAwaitingZonePick, beginZonePick, continueLuanwu,
-  finishTargetedCard, leaveEquipArea,
+  finishTargetedCard, leaveEquipArea, enterPlayFromDraw,
 } from './game'
+import {
+  extraOf,
+  GUHUO_AS_CHOICES,
+  finishHaoshiGive,
+  leastHandSeats,
+} from './official'
 
 export function activateSkill(state: GameSnapshot, playerId: number, skillId: string): void {
   if (state.winnerIds) return
@@ -82,17 +88,29 @@ export function activateSkill(state: GameSnapshot, playerId: number, skillId: st
   }
 
   if (skillId === 'zhiheng') {
-    if (p.zhihengUsed || !p.hand.length) return
+    const equipUids = equipSlots()
+      .map((s) => p.equips[s]?.uid)
+      .filter((uid): uid is string => !!uid)
+    if (p.zhihengUsed || (!p.hand.length && !equipUids.length)) return
+    const all = [...p.hand.map((c) => c.uid), ...equipUids]
     state.prompt = {
       kind: 'skill_cards',
-      message: '【制衡】選擇要棄置的手牌，然後確認',
+      message: '【制衡】選擇要棄置的牌（含裝備），然後確認',
       actorId: playerId,
       skillId: 'zhiheng',
-      cardUids: p.hand.map((c) => c.uid),
+      cardUids: all,
       selectedCardUids: [],
       minTargets: 1,
-      maxTargets: p.hand.length,
-      choices: [{ id: 'confirm', label: '確認制衡' }],
+      maxTargets: all.length,
+      choices: [
+        ...equipUids.map((uid) => {
+          const slot = equipSlots().find((s) => p.equips[s]?.uid === uid)
+          const card = slot ? p.equips[slot] : undefined
+          const name = card ? getCardDef(card.defId).name : '裝備'
+          return { id: uid, label: `棄【${name}】` }
+        }),
+        { id: 'confirm', label: '確認制衡' },
+      ],
       choiceKey: 'skill_confirm',
     }
     return
@@ -402,12 +420,7 @@ export function confirmSkillCards(state: GameSnapshot, playerId: number): void {
       actorId: playerId,
       choiceKey: 'guhuo_as',
       selectedCardUids: selected,
-      choices: [
-        { id: 'sha', label: '殺' },
-        { id: 'shan', label: '閃' },
-        { id: 'tao', label: '桃' },
-        { id: 'wuzhong', label: '無中生有' },
-      ],
+      choices: GUHUO_AS_CHOICES.map((c) => ({ id: c.id, label: c.label })),
     }
     return
   }
@@ -426,14 +439,55 @@ export function confirmSkillCards(state: GameSnapshot, playerId: number): void {
   }
 
   if (skillId === 'zhiheng') {
+    let n = 0
     for (const uid of selected) {
-      const c = takeHand(state, playerId, uid)
-      if (c) discardCard(state, c)
+      const fromHand = takeHand(state, playerId, uid)
+      if (fromHand) {
+        discardCard(state, fromHand)
+        n++
+        continue
+      }
+      for (const slot of equipSlots()) {
+        const eq = p.equips[slot]
+        if (eq?.uid === uid) {
+          leaveEquipArea(state, playerId, slot, eq)
+          n++
+          break
+        }
+      }
     }
-    draw(state, playerId, selected.length)
+    draw(state, playerId, n)
     p.zhihengUsed = true
-    log(state, `${p.name} 發動【制衡】，棄 ${selected.length} 張並摸 ${selected.length} 張。`)
+    log(state, `${p.name} 發動【制衡】，棄 ${n} 張並摸 ${n} 張。`)
     setPlayPrompt(state)
+    return
+  }
+
+  if (skillId === 'haoshi') {
+    const seats = leastHandSeats(state, p.id)
+    extraOf(state)._haoshiUids = selected
+    if (!seats.length) {
+      extraOf(state)._haoshiUids = undefined
+      enterPlayFromDraw(state)
+      return
+    }
+    if (seats.length === 1) {
+      extraOf(state)._haoshiUids = undefined
+      finishHaoshiGive(state, p, selected, seats[0]!.id)
+      enterPlayFromDraw(state)
+      return
+    }
+    state.prompt = {
+      kind: 'choice',
+      message: '【好施】選擇交給手牌最少的角色',
+      actorId: playerId,
+      choiceKey: 'haoshi_target',
+      selectedCardUids: selected,
+      choices: seats.map((x) => ({
+        id: String(x.id),
+        label: `${x.name}（${x.hand.length}張）`,
+      })),
+    }
     return
   }
 

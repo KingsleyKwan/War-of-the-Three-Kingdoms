@@ -48,6 +48,15 @@ import {
   trimBuquOnHeal,
   kingdomOf,
   tryJudgeReplace,
+  finishGuanxingSplit,
+  giveYiji,
+  startYiji,
+  applyChosenHuashen,
+  huashenSkillIds,
+  finishHaoshiGive,
+  GUHUO_AS_CHOICES,
+  guhuoKindMatches,
+  jushouDrawCount,
 } from './official'
 import { resumeAfterJudgeReplace, applyTieqiResult, applyBaguaResult, applyShuangxiong, finishLeiji, continueAfterLeiji } from './judges'
 import {
@@ -55,6 +64,8 @@ import {
   continueBeginTurn,
   finishGuanxing,
   runPrepareSkills,
+  runAwakenAndPrepare,
+  enterPlayFromDraw,
   applyJudgeReplaceSync,
   stealToNi,
   xiansiCandidates,
@@ -133,11 +144,12 @@ import {
 export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: string): void {
   if (state.prompt.actorId !== playerId) return
 
-  if (
-    state.prompt.kind === 'skill_cards' &&
-    (choiceId === 'confirm' || state.prompt.choiceKey === 'skill_confirm')
-  ) {
-    confirmSkillCards(state, playerId)
+  if (state.prompt.kind === 'skill_cards') {
+    if (choiceId === 'confirm') {
+      confirmSkillCards(state, playerId)
+      return
+    }
+    handleSkillCardPick(state, playerId, choiceId)
     return
   }
 
@@ -167,6 +179,100 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
       log(state, `${state.players[playerId].name} 發動好施，額外摸兩張牌。`)
     }
     continueBeginTurn(state)
+    return
+  }
+
+  if (key === 'haoshi_target') {
+    const p = state.players[playerId]
+    const uids = extraOf(state)._haoshiUids ?? state.prompt.selectedCardUids ?? []
+    extraOf(state)._haoshiUids = undefined
+    finishHaoshiGive(state, p, uids, Number(choiceId))
+    enterPlayFromDraw(state)
+    return
+  }
+
+  if (key === 'yiji_give') {
+    giveYiji(state, Number(choiceId))
+    if (startYiji(state)) return
+    resumeAfterDamageFlow(state)
+    return
+  }
+
+  if (key === 'zhiji_pick') {
+    const p = state.players[playerId]
+    if (choiceId === 'recover' && p.hp < p.maxHp) {
+      p.hp += 1
+      log(state, `${p.name} 因志繼回覆1點體力。`)
+    } else {
+      draw(state, playerId, 2)
+      log(state, `${p.name} 因志繼摸兩張牌。`)
+    }
+    runAwakenAndPrepare(state)
+    return
+  }
+
+  if (key === 'huashen_general') {
+    const p = state.players[playerId]
+    const when = extraOf(state)._huashenWhen
+    if (choiceId === 'skip') {
+      extraOf(state)._huashenPick = undefined
+      extraOf(state)._huashenWhen = undefined
+      if (when === 'end') runEndPhaseSkills(state, playerId)
+      else runAwakenAndPrepare(state)
+      return
+    }
+    extraOf(state)._huashenPick = choiceId
+    const skills = huashenSkillIds(choiceId)
+    if (skills.length <= 1) {
+      if (skills[0]) applyChosenHuashen(state, p, choiceId, skills[0])
+      extraOf(state)._huashenWhen = undefined
+      extraOf(state)._huashenPick = undefined
+      if (when === 'end') runEndPhaseSkills(state, playerId)
+      else runAwakenAndPrepare(state)
+      return
+    }
+    state.prompt = {
+      kind: 'choice',
+      message: '【化身】聲明其中一個技能',
+      actorId: playerId,
+      choiceKey: 'huashen_skill',
+      choices: skills.map((id) => ({ id, label: skillLabel(id) })),
+    }
+    return
+  }
+
+  if (key === 'huashen_skill') {
+    const p = state.players[playerId]
+    const gid = extraOf(state)._huashenPick
+    const when = extraOf(state)._huashenWhen
+    extraOf(state)._huashenPick = undefined
+    extraOf(state)._huashenWhen = undefined
+    if (gid) applyChosenHuashen(state, p, gid, choiceId)
+    if (when === 'end') runEndPhaseSkills(state, playerId)
+    else runAwakenAndPrepare(state)
+    return
+  }
+
+  if (key === 'guanxing_split') {
+    if (choiceId === 'confirm') {
+      finishGuanxingSplit(state, state.prompt.selectedCardUids ?? [])
+      continueBeginTurn(state)
+      return
+    }
+    const selected = [...(state.prompt.selectedCardUids ?? [])]
+    const idx = selected.indexOf(choiceId)
+    if (idx >= 0) selected.splice(idx, 1)
+    else selected.push(choiceId)
+    state.prompt = { ...state.prompt, selectedCardUids: selected }
+    return
+  }
+
+  if (key === 'guhuo_challenge') {
+    if (choiceId === 'challenge') {
+      resolveGuhuoChallenge(state, playerId)
+      return
+    }
+    if (askNextGuhuoChallenge(state)) return
     return
   }
 
@@ -1048,9 +1154,10 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
   if (key === 'jushou') {
     const p = state.players[playerId]
     if (choiceId === 'yes') {
-      draw(state, playerId, 3)
+      const n = jushouDrawCount(p)
+      draw(state, playerId, n)
       p.facedown = true
-      log(state, `${p.name} 發動據守，摸三張牌並將武將牌翻面。`)
+      log(state, `${p.name} 發動據守，摸 ${n} 張牌並將武將牌翻面。`)
     }
     runEndPhaseSkills(state, playerId)
     return
@@ -1094,40 +1201,20 @@ export function resolveChoice(state: GameSnapshot, playerId: number, choiceId: s
   if (key === 'guhuo_as') {
     const p = state.players[playerId]
     const uid = state.prompt.selectedCardUids?.[0]
-    const card = uid ? takeHand(state, playerId, uid) : null
-    if (!card) {
+    if (!uid || !p.hand.some((c) => c.uid === uid)) {
       setPlayPrompt(state)
       return
     }
-    discardCard(state, card)
-    p.guhuoUsed = true
-    log(state, `${p.name} 發動蠱惑，將一張牌當【${choiceId}】使用。`)
-    if (choiceId === 'tao') p.hp = Math.min(p.maxHp, p.hp + 1)
-    else if (choiceId === 'wuzhong') draw(state, playerId, 2)
-    else if (choiceId === 'shan') {
-      log(state, `${p.name} 於出牌階段不能當【閃】使用，蠱惑無效。`)
-      p.guhuoUsed = false
-      p.hand.push(card)
-      const idx = state.discard.findIndex((c) => c.uid === card.uid)
-      if (idx >= 0) state.discard.splice(idx, 1)
-      setPlayPrompt(state)
-      return
+    extraOf(state)._guhuo = {
+      actorId: playerId,
+      uid,
+      asKind: choiceId,
+      cursor: 0,
+      asked: 0,
     }
-    else if (choiceId === 'sha') {
-      const targets = legalTargets(state, playerId, 'sha')
-      if (targets.length) {
-        state.prompt = {
-          kind: 'choice',
-          message: '【蠱惑】選擇殺的目標',
-          actorId: playerId,
-          choiceKey: 'guhuo_sha_target',
-          selectedCardUids: [card.uid],
-          choices: targets.map((id) => ({ id: String(id), label: state.players[id].name })),
-        }
-        return
-      }
-    }
-    setPlayPrompt(state)
+    const named = GUHUO_AS_CHOICES.find((c) => c.id === choiceId)?.label ?? choiceId
+    log(state, `${p.name} 發動蠱惑，聲稱使用【${named}】。`)
+    if (askNextGuhuoChallenge(state)) return
     return
   }
 
@@ -2088,4 +2175,103 @@ function askNextJijiang(state: GameSnapshot): void {
   log(state, '無人響應激將。')
   setPlayPrompt(state)
 }
+
+function askNextGuhuoChallenge(state: GameSnapshot): boolean {
+  const g = extraOf(state)._guhuo
+  if (!g) return false
+  const n = state.players.length
+  while (g.asked < n) {
+    const seat = (g.actorId + g.asked) % n
+    g.asked++
+    const pl = state.players[seat]
+    if (!pl?.alive || pl.id === g.actorId) continue
+    if (pl.isHuman) {
+      const named = GUHUO_AS_CHOICES.find((c) => c.id === g.asKind)?.label ?? g.asKind
+      state.prompt = {
+        kind: 'choice',
+        message: `【蠱惑】${state.players[g.actorId].name} 聲稱使用【${named}】。是否質疑？`,
+        actorId: pl.id,
+        choiceKey: 'guhuo_challenge',
+        choices: [
+          { id: 'challenge', label: '質疑' },
+          { id: 'skip', label: '不質疑' },
+        ],
+      }
+      return true
+    }
+  }
+  finishGuhuoAsNamed(state)
+  return false
+}
+
+function finishGuhuoAsNamed(state: GameSnapshot): void {
+  const g = extraOf(state)._guhuo
+  extraOf(state)._guhuo = undefined
+  if (!g) {
+    setPlayPrompt(state)
+    return
+  }
+  const p = state.players[g.actorId]
+  if (!p?.alive) {
+    setPlayPrompt(state)
+    return
+  }
+  p.guhuoUsed = true
+  const asKind = g.asKind
+  const named = GUHUO_AS_CHOICES.find((c) => c.id === asKind)?.label ?? asKind
+  if (asKind === 'shan' || asKind === 'wuxie') {
+    const card = takeHand(state, p.id, g.uid)
+    if (card) discardCard(state, card)
+    log(state, `${p.name} 於出牌階段當【${named}】使用，沒有目標，結算結束。`)
+    setPlayPrompt(state)
+    return
+  }
+  extraOf(state)._playAsKind = asKind
+  state.prompt = {
+    kind: 'choose_card',
+    message: `${p.name} 的出牌階段`,
+    actorId: p.id,
+    cardUids: [g.uid],
+  }
+  selectCard(state, p.id, g.uid, asKind)
+}
+
+function resolveGuhuoChallenge(state: GameSnapshot, challengerId: number): void {
+  const g = extraOf(state)._guhuo
+  if (!g) {
+    setPlayPrompt(state)
+    return
+  }
+  const actor = state.players[g.actorId]
+  const card = actor.hand.find((c) => c.uid === g.uid)
+  const actual = card ? cardKind(card) : ''
+  const truth = guhuoKindMatches(actual, g.asKind)
+  const shown = card ? getCardDef(card.defId).name : '?'
+  log(state, `${state.players[challengerId].name} 質疑蠱惑，亮出【${shown}】。`)
+  if (truth) {
+    const ch = state.players[challengerId]
+    ch.hp -= 1
+    pushDamageFx(state, challengerId, 1)
+    log(state, `${ch.name} 質疑錯誤，失去1點體力。`)
+    if (ch.hp <= 0) {
+      trySave(state, challengerId, g.actorId)
+      if (getDying(state) || isAwaitingZonePick(state)) return
+    }
+    finishGuhuoAsNamed(state)
+    return
+  }
+  const dumped = takeHand(state, actor.id, g.uid)
+  if (dumped) discardCard(state, dumped)
+  extraOf(state)._guhuo = undefined
+  actor.guhuoUsed = true
+  actor.hp -= 1
+  pushDamageFx(state, actor.id, 1)
+  log(state, `${actor.name} 被質疑成功，失去1點體力，此牌無效。`)
+  if (actor.hp <= 0) {
+    trySave(state, actor.id, challengerId)
+    if (getDying(state) || isAwaitingZonePick(state)) return
+  }
+  if (!state.winnerIds) setPlayPrompt(state)
+}
+
 

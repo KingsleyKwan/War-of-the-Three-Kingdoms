@@ -53,8 +53,6 @@ import {
   clearPlayFx,
   log,
   skillLabel,
-  HUASHEN_POOL,
-  pickHuashenSkill,
   turnSkipOf,
   draw,
   discardCard,
@@ -76,7 +74,7 @@ import {
   nextDelayedTrick,
   peachHealAmount,
   popExtraTurn,
-  seedHuashenPile,
+  dealStartingHuashen,
   startDelayedJudges,
   takeDiscardPhaseCards,
   trackDiscard,
@@ -84,6 +82,12 @@ import {
   enqueueExtraTurn,
   identityKillReward,
   trimBuquOnHeal,
+  askHuashen,
+  drainTuntian,
+  startHaoshiGive,
+  finishGuanxingSplit,
+  maybeQueueTuntian,
+  jushouDrawCount,
   type JudgeResume,
 } from './official'
 export {
@@ -95,7 +99,11 @@ export {
   identityKillReward,
   peachHealAmount,
   kingdomOf,
-  seedHuashenPile,
+  dealStartingHuashen,
+  drainTuntian,
+  askHuashen,
+  startYiji,
+  finishGuanxingSplit,
   trimBuquOnHeal,
 } from './official'
 import { ensureJudgeQueue, runNextDelayedJudge, startLuoshen } from './judges'
@@ -197,7 +205,7 @@ export function createMatch(config: MatchConfig): GameSnapshot {
     draw(state, pl.id, 4)
   }
   applyBoardSetup(state)
-  seedHuashenPile(state)
+  dealStartingHuashen(state)
   log(state, '發牌完成，戰斗開始。')
   beginTurn(state)
   return state
@@ -352,7 +360,7 @@ export function confirmGeneralPick(
   for (const pl of state.players) {
     draw(state, pl.id, 4)
   }
-  seedHuashenPile(state)
+  dealStartingHuashen(state)
   log(state, '發牌完成，戰斗開始。')
   beginTurn(state)
 }
@@ -447,33 +455,10 @@ export function beginTurn(state: GameSnapshot): void {
   const skills = playerSkills(p)
 
   if (skills.includes('huashen')) {
-    applyHuashen(state, p)
+    if (askHuashen(state, p, 'prep')) return
   }
 
-  if (skills.includes('zaoxian') && !p.zaoxianAwakened && (p.tianCount ?? 0) >= 3) {
-    p.zaoxianAwakened = true
-    p.maxHp = Math.max(1, p.maxHp - 1)
-    p.hp = Math.min(p.hp, p.maxHp)
-    p.extraSkills = [...new Set([...(p.extraSkills ?? []), 'jixi'])]
-    log(state, `${p.name} 覺醒【鑿險】，減1點體力上限並獲得【急襲】。`)
-  }
-  if (skills.includes('zhiji') && !p.zhijiAwakened && p.hand.length === 0) {
-    p.zhijiAwakened = true
-    p.maxHp = Math.max(1, p.maxHp - 1)
-    p.hp = Math.min(p.hp, p.maxHp)
-    p.extraSkills = [...new Set([...(p.extraSkills ?? []), 'guanxing'])]
-    draw(state, p.id, 2)
-    log(state, `${p.name} 覺醒【志繼】，摸兩張牌並獲得【觀星】。`)
-  }
-  if (skills.includes('hunzi') && !p.hunziAwakened && p.hp <= 1) {
-    p.hunziAwakened = true
-    p.maxHp = Math.max(1, p.maxHp - 1)
-    p.hp = Math.min(p.hp, p.maxHp)
-    p.extraSkills = [...new Set([...(p.extraSkills ?? []), 'yingzi', 'yinghun'])]
-    log(state, `${p.name} 覺醒【魂姿】，獲得【英姿】與【英魂】。`)
-  }
-
-  runPrepareSkills(state)
+  runAwakenAndPrepare(state)
 }
 
 export function xiansiCandidates(state: GameSnapshot, p: PlayerState): PlayerState[] {
@@ -513,6 +498,59 @@ export function stealToNi(state: GameSnapshot, p: PlayerState, victim: PlayerSta
     p.niCards = [...(p.niCards ?? []), card]
     log(state, `${p.name} 發動【陷嗣】，將 ${victim.name} 的一張牌置為「逆」。`)
   }
+}
+
+export function runAwakenAndPrepare(state: GameSnapshot): void {
+  if (state.winnerIds) return
+  const p = state.players[state.currentPlayer]
+  if (!p?.alive) {
+    advanceTurn(state)
+    return
+  }
+  const skills = playerSkills(p)
+  if (skills.includes('zaoxian') && !p.zaoxianAwakened && (p.tianCount ?? 0) >= 3) {
+    p.zaoxianAwakened = true
+    p.maxHp = Math.max(1, p.maxHp - 1)
+    p.hp = Math.min(p.hp, p.maxHp)
+    p.extraSkills = [...new Set([...(p.extraSkills ?? []), 'jixi'])]
+    log(state, `${p.name} 覺醒【鑿險】，減1點體力上限並獲得【急襲】。`)
+  }
+  if (skills.includes('zhiji') && !p.zhijiAwakened && p.hand.length === 0) {
+    p.zhijiAwakened = true
+    p.maxHp = Math.max(1, p.maxHp - 1)
+    p.hp = Math.min(p.hp, p.maxHp)
+    p.extraSkills = [...new Set([...(p.extraSkills ?? []), 'guanxing'])]
+    log(state, `${p.name} 覺醒【志繼】，減1點體力上限並獲得【觀星】。`)
+    if (p.isHuman) {
+      const canRecover = p.hp < p.maxHp
+      state.prompt = {
+        kind: 'choice',
+        message: '【志繼】選擇回覆1點體力或摸兩張牌',
+        actorId: p.id,
+        choiceKey: 'zhiji_pick',
+        choices: [
+          ...(canRecover ? [{ id: 'recover', label: '回覆1點體力' }] : []),
+          { id: 'draw', label: '摸兩張牌' },
+        ],
+      }
+      return
+    }
+    if (p.hp < p.maxHp) {
+      p.hp += 1
+      log(state, `${p.name} 因志繼回覆1點體力。`)
+    } else {
+      draw(state, p.id, 2)
+      log(state, `${p.name} 因志繼摸兩張牌。`)
+    }
+  }
+  if (skills.includes('hunzi') && !p.hunziAwakened && p.hp <= 1) {
+    p.hunziAwakened = true
+    p.maxHp = Math.max(1, p.maxHp - 1)
+    p.hp = Math.min(p.hp, p.maxHp)
+    p.extraSkills = [...new Set([...(p.extraSkills ?? []), 'yingzi', 'yinghun'])]
+    log(state, `${p.name} 覺醒【魂姿】，獲得【英姿】與【英魂】。`)
+  }
+  runPrepareSkills(state)
 }
 
 export function runPrepareSkills(state: GameSnapshot): void {
@@ -576,17 +614,25 @@ export function runPrepareSkills(state: GameSnapshot): void {
       if (c) peeked.push(c)
     }
     if (peeked.length) {
-      ;(state as GameSnapshot & { _guanxing?: CardInstance[] })._guanxing = peeked
-      const names = peeked.map((c) => getCardDef(c.defId).name).join('、')
+      extraOf(state)._guanxing = peeked
       state.prompt = {
         kind: 'choice',
-        message: `【觀星】牌堆頂：${names}`,
+        message: '【觀星】點選置於牌堆頂的牌（未選者置於牌堆底），再確認。點選順序即為牌堆頂由上至下。',
         actorId: p.id,
-        choiceKey: 'guanxing',
+        choiceKey: 'guanxing_split',
+        cardUids: peeked.map((c) => c.uid),
+        selectedCardUids: peeked.map((c) => c.uid),
+        minTargets: 0,
+        maxTargets: peeked.length,
         choices: [
-          { id: 'keep', label: '按此順序放回牌堆頂' },
-          { id: 'reverse', label: '反轉後放回牌堆頂' },
-          { id: 'bottom', label: '全部置於牌堆底' },
+          ...peeked.map((c) => {
+            const d = getCardDef(c.defId)
+            return {
+              id: c.uid,
+              label: `${suitShort(d.suit ?? '')}${rankShort(d.rank)}【${d.name}】`,
+            }
+          }),
+          { id: 'confirm', label: '確認（選中置頂，其餘置底）' },
         ],
       }
       return
@@ -603,24 +649,10 @@ export function runPrepareSkills(state: GameSnapshot): void {
 }
 
 export function finishGuanxing(state: GameSnapshot, mode: 'keep' | 'reverse' | 'bottom'): void {
-  const peeked =
-    (state as GameSnapshot & { _guanxing?: CardInstance[] })._guanxing ?? []
-  delete (state as GameSnapshot & { _guanxing?: CardInstance[] })._guanxing
-  const p = state.players[state.currentPlayer]
-  let ordered = [...peeked]
-  if (mode === 'reverse') ordered = ordered.reverse()
-  if (mode === 'bottom') {
-    state.deck = [...ordered, ...state.deck]
-    log(state, `${p.name} 發動觀星，將 ${ordered.length} 張牌置於牌堆底。`)
-  } else {
-    for (let i = ordered.length - 1; i >= 0; i--) {
-      state.deck.push(ordered[i])
-    }
-    log(
-      state,
-      `${p.name} 發動觀星，將 ${ordered.length} 張牌${mode === 'reverse' ? '反轉後' : ''}放回牌堆頂。`,
-    )
-  }
+  const peeked = extraOf(state)._guanxing ?? []
+  const ordered = mode === 'reverse' ? [...peeked].reverse() : peeked
+  const topUids = mode === 'bottom' ? [] : ordered.map((c) => c.uid)
+  finishGuanxingSplit(state, topUids)
   continueBeginTurn(state)
 }
 
@@ -682,6 +714,9 @@ export function applyJudgeReplaceSync(
 
 export function continueBeginTurn(state: GameSnapshot): void {
   if (state.winnerIds) return
+  extraOf(state)._tuntianResume = 'begin'
+  if (drainTuntian(state)) return
+  extraOf(state)._tuntianResume = undefined
   const p = state.players[state.currentPlayer]
   if (!p?.alive) {
     advanceTurn(state)
@@ -689,6 +724,11 @@ export function continueBeginTurn(state: GameSnapshot): void {
   }
   const skills = playerSkills(p)
   const turn = turnSkipOf(state)
+
+  if (turn.drewCards) {
+    enterPlayFromDraw(state)
+    return
+  }
 
   if (skills.includes('xuanhuo') && !turn.xuanhuoAsked) {
     turn.xuanhuoAsked = true
@@ -882,19 +922,26 @@ export function continueBeginTurn(state: GameSnapshot): void {
       draw(state, p.id, drawN)
       log(state, `${p.name} 摸了 ${drawN} 張牌${turn.luoyiOn ? '（裸衣少摸）' : ''}${turn.haoshiOn ? '（好施）' : ''}。`)
     }
-    if (turn.haoshiOn && p.hand.length > 5) {
-      const least = state.players
-        .filter((x) => x.alive && x.id !== p.id)
-        .sort((a, b) => a.hand.length - b.hand.length)[0]
-      if (least) {
-        const give = Math.floor(p.hand.length / 2)
-        least.hand.push(...p.hand.splice(0, give))
-        log(state, `${p.name} 發動好施，交給 ${least.name} ${give} 張牌。`)
-      }
-    }
   } else {
     log(state, `${p.name} 跳過摸牌階段。`)
   }
+  turn.drewCards = true
+  if (turn.haoshiOn && startHaoshiGive(state, p)) return
+  enterPlayFromDraw(state)
+}
+
+export function enterPlayFromDraw(state: GameSnapshot): void {
+  if (state.winnerIds) return
+  extraOf(state)._tuntianResume = 'play'
+  if (drainTuntian(state)) return
+  extraOf(state)._tuntianResume = undefined
+  const p = state.players[state.currentPlayer]
+  if (!p?.alive) {
+    advanceTurn(state)
+    return
+  }
+  const skills = playerSkills(p)
+  const turn = turnSkipOf(state)
 
   if (turn.shensuVirtual) {
     turn.shensuVirtual = false
@@ -914,7 +961,7 @@ export function continueBeginTurn(state: GameSnapshot): void {
     }
   }
 
-  if (skipPlay || turn.shensuSkipPlay) {
+  if (turn.skipPlay || turn.shensuSkipPlay) {
     // 樂不思蜀／神速選項二／巧變等：跳過出牌，但仍須進入棄牌
     log(state, `${p.name} 跳過出牌階段。`)
     finishEndPhase(state, p.id)
@@ -961,6 +1008,9 @@ export function continueBeginTurn(state: GameSnapshot): void {
 }
 
 export function setPlayPrompt(state: GameSnapshot): void {
+  extraOf(state)._tuntianResume = 'play'
+  if (drainTuntian(state)) return
+  extraOf(state)._tuntianResume = undefined
   const p = state.players[state.currentPlayer]
   state.prompt = {
     kind: 'choose_card',
@@ -1076,8 +1126,10 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
   const p = state.players[playerId]
   const card = findCard(p, uid)
   if (!card) return
+  const forced = extraOf(state)._playAsKind
+  if (forced) extraOf(state)._playAsKind = undefined
   const opts = getPlayKindOptions(p, card)
-  if (!asKind && opts.length > 1) {
+  if (!forced && !asKind && opts.length > 1) {
     const labels: Record<string, string> = {
       sha: '當【殺】',
       shan: '當【閃】',
@@ -1102,7 +1154,7 @@ export function selectCard(state: GameSnapshot, playerId: number, uid: string, a
     }
     return
   }
-  const kind = asKind && opts.includes(asKind) ? asKind : cardKind(card)
+  const kind = forced ?? (asKind && opts.includes(asKind) ? asKind : cardKind(card))
   const def = getCardDef(card.defId)
 
   if (def.type === 'equip') {
@@ -2130,6 +2182,7 @@ export function leaveEquipArea(
     draw(state, playerId, 2)
     log(state, `${p.name} 發動梟姬，摸兩張牌。`)
   }
+  maybeQueueTuntian(state, playerId)
 }
 
 export function notifyMovedEquips(
@@ -2149,6 +2202,7 @@ export function notifyMovedEquips(
         draw(state, p.id, 2)
         log(state, `${p.name} 發動梟姬，摸兩張牌。`)
       }
+      maybeQueueTuntian(state, p.id)
     }
   }
 }
@@ -2205,6 +2259,9 @@ export function continueLuanwu(state: GameSnapshot): void {
 export function resumeAfterResponse(state: GameSnapshot): void {
   checkVictory(state)
   if (state.winnerIds) return
+  extraOf(state)._tuntianResume = 'response'
+  if (drainTuntian(state)) return
+  extraOf(state)._tuntianResume = undefined
   const luanwu = (state as GameSnapshot & { _luanwu?: { sourceId: number; queue: number[] } })._luanwu
   if (luanwu) {
     continueLuanwu(state)
@@ -2798,13 +2855,23 @@ export function isAwaitingZonePick(state: GameSnapshot): boolean {
       state.prompt.choiceKey === 'dying_save' ||
       state.prompt.choiceKey === 'jieming' ||
       state.prompt.choiceKey === 'xingshang' ||
-      state.prompt.choiceKey === 'fangzhu_target')
+      state.prompt.choiceKey === 'fangzhu_target' ||
+      state.prompt.choiceKey === 'yiji_give' ||
+      state.prompt.choiceKey === 'zhiji_pick' ||
+      state.prompt.choiceKey === 'huashen_general' ||
+      state.prompt.choiceKey === 'huashen_skill' ||
+      state.prompt.choiceKey === 'guanxing_split' ||
+      state.prompt.choiceKey === 'guhuo_challenge' ||
+      state.prompt.choiceKey === 'haoshi_target')
   )
 }
 
 export function resumeAfterDamageFlow(state: GameSnapshot): void {
   checkVictory(state)
   if (state.winnerIds) return
+  extraOf(state)._tuntianResume = 'damage'
+  if (drainTuntian(state)) return
+  extraOf(state)._tuntianResume = undefined
 
   const deferred = (state as GameSnapshot & {
     _enyuanDeferredDying?: { targetId: number; killerId: number | null }
@@ -3012,6 +3079,9 @@ export function finishEndPhase(state: GameSnapshot, playerId: number): void {
 }
 
 export function runEndPhaseSkills(state: GameSnapshot, playerId: number): void {
+  extraOf(state)._tuntianResume = 'end'
+  if (drainTuntian(state)) return
+  extraOf(state)._tuntianResume = undefined
   const p = state.players[playerId]
   const skills = playerSkills(p)
   const turn = turnSkipOf(state)
@@ -3046,17 +3116,22 @@ export function runEndPhaseSkills(state: GameSnapshot, playerId: number): void {
 
   if (skills.includes('jushou') && !turn.jushouAsked) {
     turn.jushouAsked = true
+    const n = jushouDrawCount(p)
     state.prompt = {
       kind: 'choice',
-      message: '【據守】是否摸三張牌並將武將牌翻面？',
+      message: `【據守】是否摸 ${n} 張牌（已損失體力+2）並將武將牌翻面？`,
       actorId: playerId,
       choiceKey: 'jushou',
       choices: [
-        { id: 'yes', label: '發動據守' },
+        { id: 'yes', label: `發動據守（摸${n}）` },
         { id: 'no', label: '不發動' },
       ],
     }
     return
+  }
+
+  if (skills.includes('huashen')) {
+    if (askHuashen(state, p, 'end')) return
   }
 
   if (skills.includes('biyue')) {

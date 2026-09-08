@@ -26,4 +26,6 @@ npm run test:skills  # longer headless AI match review
 
 Shown on the start screen as `vX.Y.Z` (`src/version.ts`).
 
+v0.20.0 applies remaining paper 標準＋軍爭／風火林山 skill rules: 觀星頂底分置, 遺計每點觀看兩張交給任意, 好施自選一半, 化身兩張聲明一技能／新生加牌, 蠱惑質疑, 據守摸已損失+2, 制衡含裝備, 志繼回1或摸2, 屯田判定可被鬼才／鬼道替換.
+
 v0.19.0 aligns identity-mode play with paper 標準＋軍爭／風火林山 rules: 主公+1 HP and 主公技, 擊殺反賊摸 3／主公殺忠臣棄所有牌, 判定區後置先判, 鬼才／鬼道（鬼道獲得原判定牌）, 翻面, 桃園按目標無懈, 裸衣少摸, 神速一至兩項, 據守／放逐翻面, 行殤獲得死亡角色的牌, 不屈「創」, 巧變跳過階段, 固政, 好施可選多摸.

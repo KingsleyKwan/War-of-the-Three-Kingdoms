@@ -60,7 +60,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['tiandu', 'yiji'],
     pack: 'standard',
-    skillText: '天妒：判定牌生效後可獲得之。遺計：每受到1點傷害後摸兩張牌，然後可將其中任意張交給其他角色。',
+    skillText: '天妒：判定牌生效後可獲得之。遺計：每受到1點傷害後，觀看牌堆頂兩張牌並將這些牌交給任意角色。',
   },
   {
     id: 'zhenji',
@@ -110,7 +110,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['guanxing', 'kongcheng'],
     pack: 'standard',
-    skillText: '觀星：準備階段觀看牌堆頂並調整。空城：手牌為0時不能成為【殺】或【決鬥】的目標。',
+    skillText: '觀星：準備階段觀看牌堆頂X張（X為存活數且最多5），將任意張以任意順序置於牌堆頂，其餘置於牌堆底。空城：手牌為0時不能成為【殺】或【決鬥】的目標。',
   },
   {
     id: 'zhaoyun',
@@ -150,7 +150,7 @@ export const GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['zhiheng', 'jiuyuan'],
     pack: 'standard',
-    skillText: '制衡：出牌階段限一次，棄任意張牌摸等量的牌。救援（主公技）：吳勢力角色對你使用的【桃】額外回覆1點體力。',
+    skillText: '制衡：出牌階段限一次，棄任意張牌（含裝備區）摸等量的牌。救援（主公技）：吳勢力角色對你使用的【桃】額外回覆1點體力。',
   },
   {
     id: 'ganning',

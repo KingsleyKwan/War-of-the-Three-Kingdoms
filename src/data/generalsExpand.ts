@@ -24,7 +24,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['jushou'],
     pack: 'wind',
-    skillText: '據守：結束階段可摸三張牌，然後將武將牌翻面。',
+    skillText: '據守：結束階段可摸X張牌（X為已損失體力+2），然後將武將牌翻面。',
   },
   {
     id: 'huangzhong',
@@ -74,7 +74,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['guhuo'],
     pack: 'wind',
-    skillText: '蠱惑：每回合限一次，將一張手牌當【殺】、【閃】、【桃】或【無中生有】（【閃】僅能在需要響應時使用）。',
+    skillText: '蠱惑：出牌階段限一次，聲稱一張基本牌或非延時錦囊並亮出一張手牌。其他角色可質疑：真則質疑者失去1體力並按所稱使用；假則你失去1體力且此牌作廢。無人質疑則按所稱使用。',
   },
   // —— 火 ——
   {
@@ -207,7 +207,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['haoshi', 'dimeng'],
     pack: 'forest',
-    skillText: '好施：多摸兩張，手牌過多時分一半給手牌最少角色。締盟：棄手牌差額並交換兩名角色手牌。',
+    skillText: '好施：摸牌階段可多摸兩張；若因此手牌多於5張，須將一半（向下取整）交給手牌最少的一名其他角色。締盟：棄手牌差額並交換兩名角色手牌。',
   },
   {
     id: 'jiaxu',
@@ -238,7 +238,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['tuntian', 'zaoxian'],
     pack: 'mountain',
-    skillText: '屯田：回合外失去牌時判定，非紅桃則置為「田」並縮短距離。鑿險：三張田時覺醒並獲得【急襲】。',
+    skillText: '屯田：回合外失去牌時判定，非紅桃則置為「田」並縮短距離（判定可被鬼才／鬼道替換）。鑿險：三張田時覺醒並獲得【急襲】。',
   },
   {
     id: 'jiangwei',
@@ -248,7 +248,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['tiaoxin', 'zhiji'],
     pack: 'mountain',
-    skillText: '挑釁：令攻擊範圍內角色對你出殺或棄牌。志繼：空手時覺醒，摸兩張並獲得【觀星】。',
+    skillText: '挑釁：令攻擊範圍內角色對你出殺或棄牌。志繼：準備階段若沒有手牌則覺醒，減1點體力上限，回覆1點體力或摸兩張牌，並獲得【觀星】。',
   },
   {
     id: 'liushan',
@@ -288,7 +288,7 @@ export const EXPANSION_GENERALS: GeneralDef[] = [
     gender: 'male',
     skills: ['huashen', 'xinsheng'],
     pack: 'mountain',
-    skillText: '化身：準備階段變為牌堆中一名未上場武將並獲得其技能。新生：受傷後重新化身。',
+    skillText: '化身：開始時獲得兩張化身牌；準備與結束階段聲明其中一個非主公技／覺醒技／限定技。新生：受到傷害後再獲得一張化身牌。',
   },
   {
     id: 'caiwenji',

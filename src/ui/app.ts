@@ -1337,9 +1337,10 @@ function renderChoicePanel(g: GameSnapshot): string {
   const choices = g.prompt.choices ?? []
   if (!choices.length) return ''
   const skillPick = g.prompt.kind === 'skill_cards'
-  const zonePick = g.prompt.choiceKey === 'zone_pick'
+  const zonePick =
+    g.prompt.choiceKey === 'zone_pick' || g.prompt.choiceKey === 'guanxing_split'
   const selected = g.prompt.selectedCardUids?.length ?? 0
-  const min = g.prompt.minTargets ?? 1
+  const min = g.prompt.minTargets ?? (g.prompt.choiceKey === 'guanxing_split' ? 0 : 1)
   return `<div class="choice-panel">
     <h3>${escapeHtml(g.prompt.message)}</h3>
     <div class="choice-row">
@@ -1347,7 +1348,8 @@ function renderChoicePanel(g: GameSnapshot): string {
         .map((c) => {
           const disabled =
             (skillPick || zonePick) && c.id === 'confirm' && selected < min
-          const picked = zonePick && !!g.prompt.selectedCardUids?.includes(c.id)
+          const picked =
+            (zonePick || skillPick) && !!g.prompt.selectedCardUids?.includes(c.id)
           const cls = [
             'btn',
             c.id === 'skip' || c.id === 'no' ? 'ghost' : 'primary',
@@ -1613,6 +1615,33 @@ function seatDetailHtml(p: PlayerState): string {
     ${idVisible ?? ''}
     <h4>武將技</h4>
     <p>${escapeHtml(gen.skillText)}</p>
+    ${
+      p.huashenCards?.length
+        ? `<h4>化身</h4><p>${p.huashenCards
+            .map((id) => {
+              try {
+                return `【${getGeneral(id).name}】`
+              } catch {
+                return id
+              }
+            })
+            .join('、')}${
+            p.huashenGeneralId
+              ? `　目前：【${(() => {
+                  try {
+                    return getGeneral(p.huashenGeneralId).name
+                  } catch {
+                    return p.huashenGeneralId
+                  }
+                })()}】${
+                  p.extraSkills?.length
+                    ? `（${p.extraSkills.map((s) => s).join('、')}）`
+                    : ''
+                }`
+              : ''
+          }</p>`
+        : ''
+    }
     <h4>裝備</h4>
     ${equips ? `<ul class="detail-list">${equips}</ul>` : '<p class="muted">無</p>'}
     ${mindHtml}`

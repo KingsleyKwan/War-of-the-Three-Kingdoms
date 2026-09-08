@@ -104,6 +104,9 @@ export type TurnSkip = {
   fangquanAsked?: boolean
   haoshiAsked?: boolean
   haoshiOn?: boolean
+  huashenPrepAsked?: boolean
+  huashenEndAsked?: boolean
+  drewCards?: boolean
 }
 
 export function turnSkipOf(state: GameSnapshot): TurnSkip {
@@ -142,15 +145,11 @@ export function takeHand(state: GameSnapshot, playerId: number, uid: string): Ca
     }
     const judged = state.deck.pop()
     if (judged) {
-      const suit = effectiveSuit(judged, p)
-      if (suit !== 'heart') {
-        p.tianCards = [...(p.tianCards ?? []), judged]
-        p.tianCount = (p.tianCount ?? 0) + 1
-        log(state, `${p.name} 發動屯田，判定非紅桃，獲得一張「田」（共 ${p.tianCount} 張）。`)
-      } else {
-        state.discard.push(judged)
-        log(state, `${p.name} 發動屯田，判定為紅桃，未獲得田。`)
+      const extra = state as GameSnapshot & {
+        _tuntianQueue?: { ownerId: number; judged: CardInstance }[]
       }
+      extra._tuntianQueue = [...(extra._tuntianQueue ?? []), { ownerId: playerId, judged }]
+      log(state, `${p.name} 的【屯田】即將判定。`)
     }
   }
   if (card && before === 1 && playerSkills(p).includes('lianying')) {
