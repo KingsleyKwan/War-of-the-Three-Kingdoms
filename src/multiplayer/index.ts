@@ -26,6 +26,7 @@ export type {
 export {
   makeEmptySeats,
   firstEmptySeat,
+  firstJoinableSeat,
   seatByClient,
 } from './types'
 
@@ -35,7 +36,10 @@ export {
   createLocalRoom,
   randomRoomId,
   fillEmptyWithAi,
+  setSeatType,
   humanCount,
+  aiCount,
+  emptyCount,
   canStart,
   renderLobby,
 } from './lobby'
@@ -49,4 +53,3 @@ export {
 
 export type { PlayerAction } from './actions'
 export { applyPlayerAction, parsePlayerAction } from './actions'
-

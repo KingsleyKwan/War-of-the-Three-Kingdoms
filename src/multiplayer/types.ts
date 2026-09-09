@@ -60,6 +60,11 @@ export function firstEmptySeat(seats: Seat[]): Seat | undefined {
   return seats.find((s) => s.type === 'empty')
 }
 
+/** Prefer a vacant seat; otherwise let a late joiner take a 電腦 seat. */
+export function firstJoinableSeat(seats: Seat[]): Seat | undefined {
+  return firstEmptySeat(seats) ?? seats.find((s) => s.type === 'ai')
+}
+
 export function seatByClient(seats: Seat[], clientId: string): Seat | undefined {
   return seats.find((s) => s.clientId === clientId)
 }
