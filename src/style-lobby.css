@@ -254,4 +254,18 @@
 .seat.human-remote {
   border-color: rgba(122, 175, 212, 0.55);
 }
-
+.lobby-lead {
+  margin: 0 0 0.8rem;
+  text-align: left;
+}
+.lobby-seat-name {
+  flex: 1;
+  min-width: 0;
+}
+.lobby-seat .seat-act {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.75rem;
+}
+.lobby-seat.seat-empty {
+  opacity: 0.7;
+}
